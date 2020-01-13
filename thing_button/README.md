@@ -1,4 +1,4 @@
-# thing button
+# Blinking LED
 
 ## Introduction
 
@@ -18,22 +18,20 @@ TODO
 
 This component includes:
 
- * Button Web Thing complient with Web Thing API
+ * Blinking LED thing
 
 ## Documentation
 
 
 ## Source Code
 
-The source is available from [GitHub](https://www.github.com/todo).
+The source is available from [GitHub](https://github.com/KrzysztofZurek1973/iot_components/tree/master/thing_blinking_led).
 
 ## License
 
 The code in this project is licensed under the MIT license - see LICENSE for details.
 
-## Links
+## Authors
 
-## Acknowledgements
-
-## Roadmap
+* **Krzysztof Zurek** - [kz](https://github.com/KrzysztofZurek1973)
 
