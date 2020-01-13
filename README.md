@@ -8,7 +8,8 @@ This repository includes „Web Thing Server” for ESP32 and things dedicated f
 
  * „Push Button” - „PushButton” thing with following parameters:
 	- property „pushed” (shows if button is pushed or not),
-	- property „counter” (shows how many times button was pushed).	
+	- property „counter” (shows how many times button was pushed),
+	- event "10times" (it sends event notification when button was pushed 10 times).
  
  * „Blinking Led” - „Light” thing with following parameters:
 	- property „led_on” (ON/OFF switch),
