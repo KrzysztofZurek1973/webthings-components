@@ -135,7 +135,8 @@ constant_on_duration = action_input_prop_init("duration",
 						&constant_on_duration_min,
 						&constant_on_duration_max,
 						"seconds");
-``` //initialize input property
+```
+//initialize input property
 
 `add_action_input_prop(constant_on, constant_on_duration);` //add input to action
 
