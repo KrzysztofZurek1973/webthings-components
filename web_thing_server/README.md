@@ -47,11 +47,11 @@ The function which creates *thing* should return thing pointer `thing_t *`.
 
 Creating things takes place in the following steps:
 
-#### Step 1 – initialize empty thing structure
+#### Step 1 – Initialize empty thing structure
 
 `blinking_led = thing_init();`
 
-#### Step 2 – set thing parameters
+#### Step 2 – Set thing parameters
 
 `blinking_led -> id = "Led";` //thing ID
 
@@ -67,7 +67,7 @@ Creating things takes place in the following steps:
 
 `blinking_led -> description = "Internet connected blinking LED";` //thing description
 
-#### Step 3 – create property
+#### Step 3 – Create property
 
 In the following lines On/Off property is created
 
@@ -107,11 +107,11 @@ Types *array* and *object*, require functions to create json model and json valu
 
 Typ `VAL_NULL` is not implemented yet!
 
-#### Step 4 – add property to thing
+#### Step 4 – Add property to thing
 
 `add_property(blinking_led, prop_led_on);` //add property to thing
 
-#### Step 5 – create action (if thing has action(s))
+#### Step 5 – Create action (if thing has action(s))
 
 `constant_on = action_init();` //initialize empty structure
 
@@ -148,6 +148,12 @@ constant_on_duration = action_input_prop_init("duration",
 
 `xTaskCreate(&blinking_led_fun, "blinking led", configMINIMAL_STACK_SIZE * 4,
 		NULL, 5, &blinking_led_task);`
+		
+#### Step 8 - Start *Web Thing Server*
+
+Start server with port number, mDNS host name and domain name (default is *local*).
+
+e.g. `start_web_thing_server(8080, mdns_hostname, DOMAIN)`;
 
 ### thread function
 
