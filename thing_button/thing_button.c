@@ -37,7 +37,7 @@ static bool pushed = false;
 
 /* ************************************************************
  *
- * delete button interrupt
+ * button interrupt
  *
  * ***********************************************************/
 static void IRAM_ATTR button_isr_handler(void* arg){
@@ -59,7 +59,6 @@ static void IRAM_ATTR button_isr_handler(void* arg){
  *
  * ************************************************************/
 void button_fun(void *pvParameter){
-	//esp_err_t err;
 
 	printf("Button task is ready\n");
 	

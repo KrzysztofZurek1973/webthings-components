@@ -47,7 +47,7 @@ static int led_freq = 20; //Hz x 10
 
 /****************************************************
 *
-* main button function
+* blinking led thread function
 *
 ****************************************************/
 void blinking_led_fun(void *param){
@@ -214,7 +214,7 @@ int8_t constant_on_run(char *inputs){
 		gpio_set_level(GPIO_LED, 1);
 		led_blinking = false;
 		
-		//wystartuj timer
+		//start timer
 		constant_on_timer = xTimerCreate("constant_on_timer",
 									pdMS_TO_TICKS(duration * 1000),
 									pdFALSE,
