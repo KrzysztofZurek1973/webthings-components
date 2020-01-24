@@ -18,6 +18,7 @@ Blinking led has @type „Light” and following parameters:
 * property `led_on`, turns on/off blinking, @type *OnOffProperty*
 * property `frequency`, frequency of blinking in 0.1 Hz (number 10 means 1 Hz), @type *LevelProperty*
 * action `constant_on`, turn led on for specified period of time, the only one input is *duration* in seconds, @type `ToggleAction`
+
 ![action](led_3.png)
 
 ## Documentation
