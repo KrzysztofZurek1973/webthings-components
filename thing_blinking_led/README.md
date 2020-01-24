@@ -27,11 +27,8 @@ How to start the node see [iot_web_thing_example](https://github.com/KrzysztofZu
 
 ### Configuration
 
-GPIO number can be set in 
+GPIO number can be set in `idf.py menuconfig -> Web Thing Example` (see [iot_web_thing_example](https://github.com/KrzysztofZurek1973/iot_web_thing_example)).
 
-`idf.py menuconfig → Web Thing Example`
-
-(see [iot_web_thing_example](https://github.com/KrzysztofZurek1973/iot_web_thing_example)).
 Default led pin is GPIO26.
 
 ### Gateway web interface
