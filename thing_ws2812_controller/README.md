@@ -1,32 +1,30 @@
-# web thing thermostat
+# web thing WS2812 led line controller
 
 ## Introduction
 
-This is a ESP32-compatible C component for Web Thing complient RGB led line (WS2812, WS2812 diodes).
+This is a ESP32-compatible C component for `Web Thing Server`. This component controlls RGB led line (WS2812, WS2812 diodes).
 
 ## Dependencies
 
 Requires:
 
- * TODO
+ * [rgb patterns](https://github.com/KrzysztofZurek1973/RGB_led_line_patterns)
 
 ## Example
 
-TODO
+See [rgb controller](https://github.com/KrzysztofZurek1973/iot_rgb_controller)
 
 ## Features
 
-This component includes:
-
- * Web Thing complient with Web Thing API
- * ---
+TODO
 
 ## Documentation
 
+TODO
 
 ## Source Code
 
-The source is available from [GitHub](https://www.github.com/todo).
+The source is available from [GitHub](https://github.com/KrzysztofZurek1973/iot_components/tree/master/thing_ws2812_controller).
 
 ## License
 
@@ -34,7 +32,10 @@ The code in this project is licensed under the MIT license - see LICENSE for det
 
 ## Links
 
-## Acknowledgements
+* [WebThing Gateway](https://iot.mozilla.org/gateway/) - https://iot.mozilla.org/gateway/
+* [Web Thing API](https://iot.mozilla.org/wot/) - https://iot.mozilla.org/wot/
+* [esp-idf](https://github.com/espressif/esp-idf) - https://github.com/espressif/esp-idf
 
-## Roadmap
+## Authors
 
+* **Krzysztof Zurek** - [kz](https://github.com/KrzysztofZurek1973)
