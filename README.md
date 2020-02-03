@@ -4,17 +4,25 @@ This repository includes „Web Thing Server” for ESP32 and things dedicated f
 
 ## Components:
 
- * „Web Thing Server” - core element, it serves adding things, creating things with it's properties, actions and events. Server supports communication in accordance with [Web Thing API](https://iot.mozilla.org/wot/), both „REST API” and „WebSocket API”. It also supports [WoT Capability Schemas](https://iot.mozilla.org/schemas/).
+* **Web Thing Server** - core element, it serves adding things, creating things with it's properties, actions and events. Server supports communication in accordance with [Web Thing API](https://iot.mozilla.org/wot/), both „REST API” and „WebSocket API”. It also supports [WoT Capability Schemas](https://iot.mozilla.org/schemas/).
 
- * „Push Button” - „PushButton” thing with following parameters:
-	- property „pushed” (shows if button is pushed or not),
-	- property „counter” (shows how many times button was pushed),
-	- event "10times" (it sends event notification when button was pushed 10 times).
+* **Push Button** - `PushButton` thing with the following parameters:
+	- `pushed`: shows if button is pushed or not
+	- `counter`: shows how many times button was pushed
+	- `10times` (event): it sends event notification when button was pushed 10 times
  
- * „Blinking Led” - „Light” thing with following parameters:
-	- property „led_on” (ON/OFF switch),
-	- property „frequency” (led blinking frequency),
-	- action „constant_on” (turns the led on for defined period of time).
+* **Blinking Led** - `Light` thing with the following parameters:
+	- `led_on`: ON/OFF switch
+	- `frequency`: led blinking frequency
+	- `constant_on` (action): turns the led on for defined period of time
+	
+* **ws2812 controller** - with the following parameters:
+	- `on` - ON/OFF led line
+	- `diodes` - number of diodes in the line
+	- `pattern` - currently running pattern
+	- `color` - RGB color defined for some patterns
+	- `speed` - pattern refreshment speed, 0 .. 100
+	- `brgh` - leds' brightness, 0 .. 100
 
 For more information, see the individual component folders.
 
