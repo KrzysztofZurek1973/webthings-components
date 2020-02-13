@@ -8,7 +8,7 @@ This is web connected push button.
 
 Requires:
 
- * [Web Thing Server](https://github.com/KrzysztofZurek1973/web_thing_server).
+ * [Web Thing Server](https://github.com/KrzysztofZurek1973/iot_components/tree/master/web_thing_server)
 
 
 ## Features
