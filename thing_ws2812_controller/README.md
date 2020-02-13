@@ -1,14 +1,15 @@
-# web thing WS2812 led line controller
+# IoT Thing: WS2812 RGB led line
 
 ## Introduction
 
-This is a ESP32-compatible C component for `Web Thing Server`. This component controlls RGB led line (WS2812, WS2812 diodes).
+This is a ESP32-compatible C component for **Web Thing Server**. This component controlls line of WS2812 (or WS2813) RGB leds.
 
 ## Dependencies
 
 Requires:
 
  * [rgb patterns](https://github.com/KrzysztofZurek1973/RGB_led_line_patterns)
+ * [Web Thing Server](https://github.com/KrzysztofZurek1973/iot_components/tree/master/web_thing_server)
 
 ## Example
 
