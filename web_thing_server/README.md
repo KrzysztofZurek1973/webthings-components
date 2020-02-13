@@ -1,4 +1,4 @@
-# Web Thing Server (WTS)
+# Web Thing Server for ESP32
 
 ## Introduction
 

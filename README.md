@@ -1,6 +1,8 @@
 # IoT components
 
-This repository includes „Web Thing Server” for ESP32 and things dedicated for this server.
+This repository includes **Web Thing Server** for ESP32 and things dedicated for this server.
+
+**Web Thing Server** and other IoT things must be placed in `components` directory in esp-idf project directory.
 
 ## Components:
 
