@@ -15,10 +15,6 @@
 #include "common.h"
 #include "rgb_color.h"
 
-void led_strip_write(rgb_t *, uint16_t);
-void led_strip_write_one_color(rgb_t *, uint16_t);
-void led_strip_write_1(uint16_t);
-void led_strip_clean(uint16_t);
 void spiAfterCallback(spi_transaction_t *);
 
 int convertRgb2Bits(unsigned char *rgbBuff,
