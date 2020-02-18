@@ -1,10 +1,18 @@
-/*
+/********************************************************************
+ *
+ * IoT device: thermometer on ESP32 with DS18B20 sensor
+ * Compatible with Web Thing API
+ *
  * thing_termometer.c
  *
- *  Created on: Oct 16, 2019
- *      Author: kz
- * 1-wire from: github.com/DavidAntliff/esp32-ds18b20-example
- */
+ *  Created on:		Oct 16, 2019
+ * Last update:		Feb 17, 2020
+ *      Author:		kz
+ *		E-mail:		krzzurek@gmail.com
+ * -------------------------------------------------------
+ * 1-wire from:		github.com/DavidAntliff/esp32-ds18b20-example
+ *
+ ********************************************************************/
 #include <inttypes.h>
 #include <string.h>
 #include <time.h>
@@ -21,7 +29,7 @@
 #include "owb_rmt.h"
 #include "ds18b20.h"
 
-//1-wire DS18B20, digital temperature sensor
+//1-wire DS18B20, digital temperature sensor constants
 #define GPIO_DS18B20_0       	(CONFIG_ONE_WIRE_GPIO)
 #define MAX_DEVICES          	(3)
 #define DS18B20_RESOLUTION   	(DS18B20_RESOLUTION_12_BIT)
@@ -41,40 +49,18 @@ static int temp_correctness = 0.0, old_temp_correctness = 0.0;	//5 readings with
 static int temp_errors = 0, old_temp_errors = 0;
 thing_t *thermometer = NULL;
 property_t *prop_temperature, *prop_errors, *prop_correctness;
-//thing description
-char therm_id_str[] = "Thermometer";
-char therm_attype_str[] = "TemperatureSensor";
-char therm_disc[] = "Indoor thermometer";
 at_type_t therm_type;
-//------  property temperature
-char temp_prop_id[] = "temperature";
-char temp_prop_disc[] = "temperature sensor DS18B20";
-char temp_prop_attype_str[] = "TemperatureProperty";
-char temp_prop_unit[] = "degree celsius";
-char temp_prop_title[] = "Temperature";
 at_type_t temp_prop_type;
-//------  property correctness
-char corr_prop_id[] = "correctness";
-char corr_prop_disc[] = "temperature correctness";
-char corr_prop_attype_str[] = "LevelProperty";
-char corr_prop_unit[] = "percent";
-char corr_prop_title[] = "Correctness";
 at_type_t corr_prop_type;
-//------  property errors
-char errors_prop_id[] = "errors";
-char errors_prop_disc[] = "temperature reading errors";
-char errors_prop_attype_str[] = "LevelProperty";
-char errors_prop_unit[] = "";
-char errors_prop_title[] = "Errors";
 at_type_t errors_prop_type;
 
-//set functions
+//thermometer thread functions
 void thermometer_fun(void *param); //thread function
 
 
 /****************************************************************
  *
- *
+ * DS18B20 initialization
  *
  * **************************************************************/
 int init_ds18b20(void){
@@ -138,17 +124,21 @@ int init_ds18b20(void){
 
 	// Create DS18B20 devices on the 1-Wire bus
 	for (int i = 0; i < num_devices; ++i){
-		DS18B20_Info *ds18b20_info = ds18b20_malloc();  // heap allocation
+		// heap allocation
+		DS18B20_Info *ds18b20_info = ds18b20_malloc();
 		devices[i] = ds18b20_info;
 
 		if (num_devices == 1){
 			printf("Single device optimizations enabled\n");
-			ds18b20_init_solo(ds18b20_info, owb);          // only one device on bus
+			// only one device on bus
+			ds18b20_init_solo(ds18b20_info, owb);
 		}
 		else{
-			ds18b20_init(ds18b20_info, owb, device_rom_codes[i]); // associate with bus and device
+			// associate with bus and device
+			ds18b20_init(ds18b20_info, owb, device_rom_codes[i]);
 		}
-		ds18b20_use_crc(ds18b20_info, true);           // enable CRC check for temperature readings
+		// enable CRC check for temperature readings
+		ds18b20_use_crc(ds18b20_info, true);
 		ds18b20_set_resolution(ds18b20_info, DS18B20_RESOLUTION);
 	}
 	return num_devices;
@@ -157,11 +147,10 @@ int init_ds18b20(void){
 
 /**********************************************************
  *
- * task for reading temperature
+ * temperature reading task
  *
  * ********************************************************/
 void thermometer_fun(void *param){
-	//int errors_count[MAX_DEVICES] = {0};
 	int sample_nr = 0;
 	float readings[MAX_DEVICES] = { 0 };
 	DS18B20_ERROR errors[MAX_DEVICES] = { 0 };
@@ -199,27 +188,20 @@ void thermometer_fun(void *param){
 				temp_errors++;
 			}
 
+			//TODO: sensor's error signaling
 			sample_nr++;
 			if (sample_nr == TEMP_SAMPLES){
 				//set new temperature
 				temperature = temp_sum / correct_samples;
 				time(&time_now);
 				int dt = abs((int)((temperature - last_sent_temperature)*100)); 
-				if ((dt >= 10) || ((time_now - time_prev) >= 10)){
-					//inform_all_subscribers_prop(prop_temperature);
-					//last_sent_temperature = temperature;
-					//time_prev = time_now;
+				if ((dt >= 10) || ((time_now - time_prev) >= 30)){
 					int8_t s = inform_all_subscribers_prop(prop_temperature);
 					if (s == 0){
 						last_sent_temperature = temperature;
 						time_prev = time_now;
 					}
 				}
-				//printf("new temperature set\n");
-				//if (temperature != old_temperature){
-				//	inform_all_subscribers(prop_temperature);
-				//	old_temperature = temperature;
-				//}
 				//set new correctness
 				temp_correctness = (100 * correct_samples)/TEMP_SAMPLES;
 				if (temp_correctness != old_temp_correctness){
@@ -255,7 +237,7 @@ void thermometer_fun(void *param){
 
 /*******************************************************
  *
- *
+ * IoT thing initialization
  *
  * ******************************************************/
 thing_t *init_thermometer(void){
@@ -265,28 +247,28 @@ thing_t *init_thermometer(void){
 	//create thing 1, counter of seconds ---------------------------------
 	thermometer = thing_init();
 
-	thermometer -> id = therm_id_str;
+	thermometer -> id = "Thermometer";
 	thermometer -> at_context = things_context;
 	thermometer -> model_len = 1500;
 	//set @type
-	therm_type.at_type = therm_attype_str;
+	therm_type.at_type = "TemperatureSensor";
 	therm_type.next = NULL;
 	set_thing_type(thermometer, &therm_type);
-	thermometer -> description = therm_disc;
+	thermometer -> description = "Indoor thermometer";
 
 	//create temperature property
 	prop_temperature = property_init(NULL, NULL);
-	prop_temperature -> id = temp_prop_id;
-	prop_temperature -> description = temp_prop_disc;
-	temp_prop_type.at_type = temp_prop_attype_str;
+	prop_temperature -> id = "temperature";
+	prop_temperature -> description = "temperature sensor DS18B20";
+	temp_prop_type.at_type = "TemperatureProperty";
 	temp_prop_type.next = NULL;
 	prop_temperature -> at_type = &temp_prop_type;
 	prop_temperature -> type = VAL_NUMBER;
 	prop_temperature -> value = &temperature;
 	prop_temperature -> max_value.float_val = 125.0;
 	prop_temperature -> min_value.float_val = -55.0;
-	prop_temperature -> unit = temp_prop_unit;
-	prop_temperature -> title = temp_prop_title;
+	prop_temperature -> unit = "degree celsius";
+	prop_temperature -> title = "Temperature";
 	prop_temperature -> read_only = true;
 	prop_temperature -> set = NULL;
 	prop_temperature -> mux = therm_mux;
@@ -295,17 +277,17 @@ thing_t *init_thermometer(void){
 
 	//create correctness property
 	prop_correctness = property_init(NULL, NULL);
-	prop_correctness -> id = corr_prop_id;
-	prop_correctness -> description = corr_prop_disc;
-	corr_prop_type.at_type = corr_prop_attype_str;
+	prop_correctness -> id = "correctness";
+	prop_correctness -> description = "temperature correctness";
+	corr_prop_type.at_type = "LevelProperty";
 	corr_prop_type.next = NULL;
 	prop_correctness -> at_type = &corr_prop_type;
 	prop_correctness -> type = VAL_INTEGER;
 	prop_correctness -> value = &temp_correctness;
 	prop_correctness -> max_value.int_val = 100;
 	prop_correctness -> min_value.int_val = 0;
-	prop_correctness -> unit = corr_prop_unit;
-	prop_correctness -> title = corr_prop_title;
+	prop_correctness -> unit = "percent";
+	prop_correctness -> title = "Correctness";
 	prop_correctness -> read_only = true;
 	prop_correctness -> set = NULL;
 	prop_correctness -> mux = therm_mux;
@@ -314,17 +296,15 @@ thing_t *init_thermometer(void){
 
 	//create errors property
 	prop_errors = property_init(NULL, NULL);
-	prop_errors -> id = errors_prop_id;
-	prop_errors -> description = errors_prop_disc;
-	errors_prop_type.at_type = errors_prop_attype_str;
+	prop_errors -> id = "errors";
+	prop_errors -> description = "temperature reading errors";
+	errors_prop_type.at_type = "LevelProperty";
 	errors_prop_type.next = NULL;
 	prop_errors -> at_type = &errors_prop_type;
 	prop_errors -> type = VAL_INTEGER;
 	prop_errors -> value = &temp_errors;
-	//prop_errors -> max_value.int_val = 100;
-	//prop_errors -> min_value.int_val = 0;
-	prop_errors -> unit = errors_prop_unit;
-	prop_errors -> title = errors_prop_title;
+	prop_errors -> unit = "";
+	prop_errors -> title = "Errors";
 	prop_errors -> read_only = true;
 	prop_errors -> set = NULL;
 	prop_errors -> mux = therm_mux;
