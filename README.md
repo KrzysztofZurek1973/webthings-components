@@ -27,6 +27,11 @@ This software uses esp-idf environment with freeRTOS.
 	- `color` - RGB color defined for some patterns
 	- `speed` - pattern refreshment speed, 0 .. 100
 	- `brgh` - leds' brightness, 0 .. 100
+	
+* **thermometer** - based on DS18B20 temperature sensor, properties:
+	- `temperature`
+	- `errors`
+	- `correctness`
 
 For more information, see the individual component folders.
 
