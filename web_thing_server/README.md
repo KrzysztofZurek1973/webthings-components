@@ -205,6 +205,14 @@ For example see
 
 in [thing_button.c](https://github.com/KrzysztofZurek1973/iot_components/blob/master/thing_button/thing_button.c)
 
+### reset button
+
+RESET button is used to reset the wifi network settings. After pressing the button, the wifi network name, password and node name are deleted from the flash memory. Then the node starts in Access Point mode (see [example](https://github.com/KrzysztofZurek1973/iot_web_thing_example#power-up) ) to enable entering new wifi network parameters. 
+
+Configuration of GPIO number for RESET button can be done in `idf.py menuconfig` -> `Web Thing Server -> RESET_GPIO`
+
+To start RESET button include `reset_button.h` and call `init_reset_button()` in start procedure.
+
 ## Source Code
 
 The source is available from [GitHub](https://github.com/KrzysztofZurek1973/iot_components/tree/master/web_thing_server).

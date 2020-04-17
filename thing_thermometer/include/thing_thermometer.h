@@ -8,6 +8,6 @@
 #ifndef MAIN_THING_THERMOMETER_H_
 #define MAIN_THING_THERMOMETER_H_
 
-thing_t *init_thermometer(void);
+thing_t *init_thermometer(char *_thing_id);
 
 #endif /* MAIN_THING_TERMOMETER_H_ */

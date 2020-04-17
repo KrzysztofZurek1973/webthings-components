@@ -237,7 +237,7 @@ void prop_value_str(property_t *p, char *buff){
 			}
 			break;
 		case VAL_NUMBER:
-			sprintf(buff, "%4.2f", *(double *)(p -> value));
+			sprintf(buff, "%4.3f", *(double *)(p -> value));
 			break;
 		case VAL_INTEGER:
 			sprintf(buff, "%i", *(int *)(p -> value));

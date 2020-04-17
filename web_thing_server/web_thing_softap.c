@@ -68,9 +68,11 @@ void wifi_init_softap()
 {
     ap_wifi_event_group = xEventGroupCreate();
 
-    tcpip_adapter_init();
+	tcpip_adapter_init();
+    //esp_netif_init();
     //ESP_ERROR_CHECK(esp_event_loop_init(ap_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    //esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -140,9 +142,9 @@ void ap_server_task(void* arg){
 	char *rq = NULL;
 	int counter = 0;
 	struct netconn *server_conn;
-	bool *node_restart;
+	//bool *node_restart;
 
-	node_restart = (bool *)arg;
+	//node_restart = (bool *)arg;
 	//set up TCP listener
 	server_conn = netconn_new(NETCONN_TCP);
 	netconn_bind(server_conn, NULL, port);
@@ -254,9 +256,6 @@ void ap_server_task(void* arg){
 						free(pass);
 						free(mdns_host);
 					}
-
-					//fflush(stdout);
-					//esp_restart();
 					netconn_write(newconn, ap_res_header_ok, strlen(ap_res_header_ok), NETCONN_COPY);
 				}
 				else{
@@ -274,7 +273,10 @@ void ap_server_task(void* arg){
 
 			netconn_close(newconn);
 			if (counter == 3){
-				*node_restart = true;
+				fflush(stdout);
+				esp_wifi_stop();
+				esp_restart();
+				//*node_restart = true;
 			}
 			else{
 				counter = 0;

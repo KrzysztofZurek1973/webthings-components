@@ -1,0 +1,14 @@
+menu "Web Thing Server"
+
+config RESET_GPIO
+    int "NVS Reset GPIO number"
+	range 0 34
+	default 27
+	help
+		GPIO number (IOxx) to access One Wire Bus.
+
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
+
+		GPIOs 35-39 are input-only so cannot be used to drive the One Wire Bus.
+
+endmenu

@@ -45,7 +45,8 @@ xTaskHandle thermometer_task; //task for reading temperature
 
 //THINGS AND PROPERTIES
 static double temperature = 0.0, last_sent_temperature = 0.0;
-static int temp_correctness = 0.0, old_temp_correctness = 0.0;	//5 readings without errors meat 100% correctness
+//5 readings without errors mean 100% correctness
+static int temp_correctness = 0, old_temp_correctness = 0;
 static int temp_errors = 0, old_temp_errors = 0;
 thing_t *thermometer = NULL;
 property_t *prop_temperature, *prop_errors, *prop_correctness;
@@ -190,16 +191,21 @@ void thermometer_fun(void *param){
 
 			//TODO: sensor's error signaling
 			sample_nr++;
-			if (sample_nr == TEMP_SAMPLES){
+			if (sample_nr%TEMP_SAMPLES == 0){
 				//set new temperature
 				temperature = temp_sum / correct_samples;
 				time(&time_now);
 				int dt = abs((int)((temperature - last_sent_temperature)*100)); 
+				//printf("dT = %i, dt = %i\n", dt, (int)(time_now - time_prev));
 				if ((dt >= 10) || ((time_now - time_prev) >= 30)){
 					int8_t s = inform_all_subscribers_prop(prop_temperature);
 					if (s == 0){
 						last_sent_temperature = temperature;
 						time_prev = time_now;
+						//printf("temperature sent, T = %f\n", temperature);
+					}
+					else{
+						//printf("temperature NOT sent, T = %f\n", temperature);
 					}
 				}
 				//set new correctness
@@ -215,9 +221,10 @@ void thermometer_fun(void *param){
 				}
 
 				//reset other values
-				sample_nr = 0;
+				//sample_nr = 0;
 				temp_sum = 0;
 				correct_samples = 0;
+				//printf("sample nr: %i\n", sample_nr);
 			}
 
 			vTaskDelayUntil(&last_wake_time, DS18B20_SAMPLE_PERIOD / portTICK_PERIOD_MS);
@@ -240,14 +247,14 @@ void thermometer_fun(void *param){
  * IoT thing initialization
  *
  * ******************************************************/
-thing_t *init_thermometer(void){
+thing_t *init_thermometer(char *_thing_id){
 
 	//start thing
 	therm_mux = xSemaphoreCreateMutex();
 	//create thing 1, counter of seconds ---------------------------------
 	thermometer = thing_init();
 
-	thermometer -> id = "Thermometer";
+	thermometer -> id = _thing_id;
 	thermometer -> at_context = things_context;
 	thermometer -> model_len = 1500;
 	//set @type

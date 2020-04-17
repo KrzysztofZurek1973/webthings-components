@@ -552,6 +552,8 @@ int16_t get_parser(char *rq, char **res, uint16_t things){
 							url_end = true; //thing number ERROR
 						}
 					}
+					else{
+					}
 					break;
 
 				case 2:
