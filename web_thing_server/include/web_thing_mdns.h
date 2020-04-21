@@ -10,6 +10,6 @@
 
 #define MDNS_DOMAIN "local"
 
-void initialise_mdns(char *_hostname, bool ap);
+void initialize_mdns(char *_hostname, bool ap, uint16_t port);
 
 #endif /* MAIN_WEB_THING_MDNS_H_ */

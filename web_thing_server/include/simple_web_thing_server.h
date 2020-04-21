@@ -49,7 +49,7 @@ int8_t inform_all_subscribers_prop(property_t *_p);
 int8_t inform_all_subscribers_action(action_t *_a, char *data, int len);
 int8_t inform_all_subscribers_event(event_t *_e, char *data, int len);
 int request_action(int8_t thing_nr, char *action_id, char *inputs);
-
+int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag);
 //variables
 
 

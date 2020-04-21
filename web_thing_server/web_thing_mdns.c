@@ -21,8 +21,8 @@ static const char *TAG_MDNS_AP = "wifi softAP";
 
 // *********************************************
 //mDNS initialization
-void initialise_mdns(char *_hostname, bool ap){
-    char *hostname;
+void initialize_mdns(char *_hostname, bool ap, uint16_t port){
+    char *hostname, port_buff[6];
 
     if ((_hostname == NULL) || (ap == true)){
     	hostname = MDNS_HOSTNAME;
@@ -45,11 +45,14 @@ void initialise_mdns(char *_hostname, bool ap){
     ESP_ERROR_CHECK( mdns_instance_name_set(MDNS_INSTANCE) );
 
     //structure with TXT records
+    itoa(port, port_buff, 10);
     mdns_txt_item_t serviceTxtData[2] = {
-        {"port","8080"},
+        {"port",port_buff},
         {"path","/"}
     };
 
     //initialize service
-    ESP_ERROR_CHECK( mdns_service_add("webthing service", "_webthing", "_tcp", 8080, serviceTxtData, 2) );
+    ESP_ERROR_CHECK(
+    	mdns_service_add("webthing service", "_webthing", "_tcp", port, serviceTxtData, 2)
+    );
 }

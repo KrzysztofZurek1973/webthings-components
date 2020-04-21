@@ -22,6 +22,7 @@
 #include "freertos/timers.h"
 
 #include "lwip/api.h"
+#include "mdns.h"
 
 #include "simple_web_thing_server.h"
 #include "websocket.h"
@@ -35,7 +36,6 @@
 #define WS_UPGRADE "Upgrade: websocket"
 
 //global server variables
-//static int8_t server_is_running = 0;
 static xTaskHandle server_task_handle;
 static struct netconn *server_conn;
 root_node_t root_node; //http parser uses it
@@ -43,6 +43,43 @@ connection_desc_t connection_tab[MAX_OPEN_CONN];
 
 //functions
 int8_t send_websocket_msg(thing_t *t, char *buff, int len);
+
+
+/*********************************************************
+*
+* close TCP connection and clear connection resources
+*
+*********************************************************/
+int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
+	struct netconn *conn_ptr;
+	err_t err;
+	uint8_t index;
+	
+	index = conn_desc -> index;
+	conn_ptr = conn_desc -> netconn_ptr;
+	printf("%s: CLOSE CONNECTION, index = %i, type: %i\n",
+			tag,
+			index,
+			conn_desc -> type);
+
+	if (conn_ptr != NULL){
+		//close TCP connection
+		if ((err = netconn_close(conn_ptr)) != ERR_OK){
+			printf("%s\"netconn_close\" ERROR: %i\n", tag, err);
+		}
+	
+		if (netconn_delete(conn_ptr) != ERR_OK){
+			printf("%s\"netconn_delete\" ERROR: %i\n", tag, err);
+		}
+		//delete subscriber
+		if (conn_desc -> type == CONN_WS){
+			delete_subscriber(conn_desc);
+		}
+	}
+	//clear record in connection table
+	memset(conn_desc, 0, sizeof(connection_desc_t));
+	return 1;
+}
 
 
 /***************************************************************************
@@ -81,10 +118,23 @@ static void connection_task(void *arg){
 			}
 
 			if (conn_desc -> type == CONN_HTTP){
+				//test
+				//printf("CONNECTION TASK HTTP\n%s\n", rq);
 				//http connection, call http parser
 				http_receive(rq, tcp_len, conn_desc);
 			}
 			else{
+				//test---------------------------------
+				//printf("CONNECTION TASK WS, len: %i\n", tcp_len);
+				//uint8_t *c;
+				
+				//c = (uint8_t *)rq;
+				//for (int i = 0; i < tcp_len; i++){
+				//	printf("%02hhX ", *c++);
+				//}
+				//printf("\n");
+				//end of test----------------------------
+				
 				//websocket connection
 				ws_receive(rq, tcp_len, conn_desc);
 			}
@@ -107,21 +157,7 @@ static void connection_task(void *arg){
 		}
 	}//while
 
-	//close TCP connection
-	//if ((net_err = netconn_close(conn_ptr)) != ERR_OK){
-	if ((net_err = netconn_close(conn_ptr)) != ERR_OK){
-		printf("\"netconn_close\" ERROR: %i\n", net_err);
-	}
-	
-	if (netconn_delete(conn_ptr) != ERR_OK){
-		printf("\"netconn_delete\" ERROR: %i\n", net_err);
-	}
-	//delete sunscriber
-	if (conn_desc -> type == CONN_WS){
-		delete_subscriber(conn_desc);
-	}
-	//clear record in connection table
-	memset(conn_desc, 0, sizeof(connection_desc_t));
+	close_thing_connection(conn_desc, "CONN_TASK");
 
 	vTaskDelete(NULL);
 }
@@ -530,6 +566,27 @@ int8_t root_node_init(void){
 	return res;
 }
 
+
+/***************************************************
+*
+* every 10 sec announce webthing service
+*
+****************************************************/
+/*
+static void mdns_announcement_task(void* arg){
+	uint32_t i = 0;
+	
+	for(;;){
+		vTaskDelay(30000 / portTICK_PERIOD_MS); //wait 30 sec
+		i++;
+		printf("mDNS task, %i\n", i);
+		//trigger mDNS announcment
+		mdns_service_port_set("_webthing", "_tcp", root_node.port);
+	}
+}
+*/
+
+
 // **************************************************************************
 int8_t start_web_thing_server(uint16_t port, char *host_name, char *domain){
 	int8_t res = 0;
@@ -545,6 +602,11 @@ int8_t start_web_thing_server(uint16_t port, char *host_name, char *domain){
 
 	cfg.port = port;
 	xTaskCreate(server_main_task, "server_main_task", 1024*10, &cfg, 1, &server_task_handle);
+	
+	//create mDNS announcement task
+	//xTaskCreate(mdns_announcement_task,
+	//			"mdns_task",
+	//			1024*2, NULL, 0, NULL);
 
 	//initialize websocket server
 	ws_server_init(port);
@@ -552,6 +614,7 @@ int8_t start_web_thing_server(uint16_t port, char *host_name, char *domain){
 
 	return res;
 }
+
 
 /*****************************************************************************
  *

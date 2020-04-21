@@ -16,6 +16,8 @@
 #include "mbedtls/sha1.h"
 #include "mbedtls/base64.h"
 
+//for mdns announcement triggering
+#include "mdns.h"
 #include "lwip/api.h"
 
 #include "websocket.h"
@@ -28,8 +30,7 @@
 
 //global server variables
 static int8_t ws_server_is_running = 0;
-//static xTaskHandle server_task_handle;
-//static struct netconn *server_conn;
+static uint16_t ws_port = 0;
 xQueueHandle ws_output_queue;
 static xSemaphoreHandle xServerMutex; //TODO: check if needed
 static xSemaphoreHandle xSendMutex; //TODO: check if needed
@@ -270,7 +271,7 @@ int8_t set_property(char *rq, thing_t *t, uint16_t tcp_len){
  * ***********************************************************************/
 int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	int msg_ok = 0, msg_start = 0;
-	uint16_t ws_len = 0;// tcp_len = 0;
+	uint16_t ws_len = 0;
 	uint8_t *msg = NULL;
 	ws_frame_header_t *ws_header;
 	uint8_t masking_key[4];
@@ -291,7 +292,9 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			//start of the message
 			ws_header = (ws_frame_header_t *)rq;
 			ws_len = ws_header -> payload_len;
+			//printf("WS len: %i\n", ws_len);
 			opcode = ws_header -> opcode;
+			//printf("WS opcode: %i\n", opcode);
 			finish = ws_header -> fin;
 			if (finish == 0x0){
 				//fragmentation not supported
@@ -306,16 +309,13 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				if (ws_len > MAX_PAYLOAD_LEN){
 					close_ws(1009, conn_desc);
 					return -1;
-					//msg_ok = -1;
 				}
 			}
 			else if (ws_len == 127){
 				//64bit addresses are not supported
 				close_ws(1009, conn_desc);
 				return -1;
-				//msg_ok = -1;
 			}
-			//printf("received msg len = %i\n", ws_len);
 			mask = ws_header -> mask;
 			if (mask == 0x1){
 				masking_key[0] = rq[offset];
@@ -353,6 +353,12 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				return -1;
 			}
 		}
+		else{
+			if ((ws_len == 0) && (opcode == WS_OP_PIN)){
+				//ping messages
+				msg_ok = 1;
+			}
+		}
 	}
 
 	//collect message, check it
@@ -375,22 +381,26 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			case WS_OP_PIN:
 				//ping control frame
 				ws_item = malloc(sizeof(ws_queue_item_t));
-				ws_item -> payload = msg;
+				if (ws_len == 0){
+					ws_item -> payload = NULL;
+				}
+				else{
+					ws_item -> payload = msg;
+				}
 				ws_item -> len = ws_len;
 				ws_item -> conn_desc = conn_desc;
 				ws_item -> opcode = WS_OP_PON;
 				ws_item -> ws_frame = 0x1;
 				ws_item -> text = 0x0;
 				//increment ping number
-				conn_desc -> ws_pings++;
-				printf("ws ping: %i\n", conn_desc -> ws_pings++);
+				//printf("ws ping: %i\n", conn_desc -> ws_pings);
 				free_msg = false;
 				//send pong
 				xQueueSend(ws_output_queue, &ws_item, portMAX_DELAY);
 				break;
 			case WS_OP_PON:
-				conn_desc -> ws_pongs++;
-				printf("ws pong: %i\n", conn_desc -> ws_pongs++);
+				//conn_desc -> ws_pongs++;
+				//printf("ws pong: %i\n", conn_desc -> ws_pongs++);
 				break;
 			case WS_OP_CON:
 			default:
@@ -405,7 +415,6 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 
 	case WS_CLOSED:
 		//check if request was 'GET /\r\n'
-		//printf("ws request:\n%s\n", rq);
 		if(rq[0] == 'G' && rq[1] == 'E' && rq[2] == 'T'
 				&& rq[3] == ' ' && rq[4] == '/') {
 			ws_item = malloc(sizeof(ws_queue_item_t));
@@ -605,12 +614,10 @@ uint8_t close_ws(uint16_t error_nr, connection_desc_t *conn_desc){
 	int *index;
 	index = malloc(sizeof(int));
 	*index = (int)(conn_desc -> index);
-	//timeout_timer = xTimerCreate("timeout", pdMS_TO_TICKS(CLOSE_TIMEOUT_MS),
-	//		pdFALSE, (void *)&(conn_desc -> index),
-	//		vCloseTimeoutCallback);
+
 	timeout_timer = xTimerCreate("timeout", pdMS_TO_TICKS(CLOSE_TIMEOUT_MS),
-			pdFALSE, (void *)index,
-			vCloseTimeoutCallback);
+					pdFALSE, (void *)index,
+					vCloseTimeoutCallback);
 
 	conn_desc -> timer_handl = timeout_timer;
 	if (conn_desc -> conn_state == WS_OPEN){
@@ -631,25 +638,16 @@ uint8_t close_ws(uint16_t error_nr, connection_desc_t *conn_desc){
 //closing timer callback
 void vCloseTimeoutCallback( TimerHandle_t xTimer ){
 	uint8_t index;
-	struct netconn *conn;
-	err_t err;
+	connection_desc_t *conn_desc;
 
 	index = *(uint8_t *) pvTimerGetTimerID(xTimer);
 	free(pvTimerGetTimerID(xTimer));
 
-	conn = connection_tab[index].netconn_ptr;
-	printf("timeout, index = %i\n", index);
-	if (conn != NULL){
-		connection_tab[index].run = CONN_STOP;
-		err = netconn_close(conn);
-		if (err != ERR_OK){
-			//TODO: what if can't be closed?
-			printf("Timeout callback, connection can't be closed, error %i\n", err);
-		}
-		else{
-			printf("connection closed by timer\n");
-		}
-	}
+	conn_desc = &connection_tab[index];
+	
+	//clear connection resources 
+	close_thing_connection(conn_desc, "TIME OUT");
+		
 	xTimerDelete(xTimer, 100);
 }
 
@@ -663,8 +661,6 @@ static void ws_send_task(void* arg){
 
 	for(;;){
 		xQueueReceive(ws_output_queue, &q_item, portMAX_DELAY);
-
-		//printf("ws data to sent:\n%s\n", q_item -> payload);
 
 		memset(head_buff, 0, q_item -> len + 4);
 		if (q_item -> ws_frame == 0x1){
@@ -682,13 +678,22 @@ static void ws_send_task(void* arg){
 		state = conn_desc -> conn_state;
 		if ((state == WS_OPEN) || (state == WS_OPENING) || (state == WS_CLOSING)){
 			err_t err = netconn_write(conn_desc -> netconn_ptr,
-					ws_data.payload,
-					ws_data.len,
-					NETCONN_COPY);
+						ws_data.payload,
+						ws_data.len,
+						NETCONN_COPY);
+			
 			if (err != ERR_OK){
+				conn_desc -> send_errors++;
 				//TODO: what if answer for open handshake was not sent?
 				printf("data not sent to one, index = %i, err = %i, \ndata:%s\n",
 						conn_desc -> index, err, (char *)ws_data.payload);
+				if (conn_desc -> send_errors >= 3){
+					printf("WS SEND: too much errors\n");
+					close_thing_connection(conn_desc, "WS_SEND_ERR");
+					//trigger mDNS announcment
+					//printf("trigger mDNS announcement\n");
+					//mdns_service_port_set("_webthing", "_tcp", ws_port);
+				}
 			}
 			else{
 				if (conn_desc -> conn_state == WS_OPENING){
@@ -697,10 +702,10 @@ static void ws_send_task(void* arg){
 				conn_desc -> packets++;
 				conn_desc -> bytes += ws_data.len;
 				if (q_item -> opcode == WS_OP_PON){
-					conn_desc -> ws_pings++;
+					conn_desc -> ws_pongs++;
 				}
 				else if (q_item -> opcode == WS_OP_PIN){
-					conn_desc -> ws_pongs++;
+					conn_desc -> ws_pings++;
 				}
 			}
 		}
@@ -726,7 +731,9 @@ void add_ws_header(ws_queue_item_t *q, ws_send_data *out){
 		header.h.payload_len = q -> len;
 		head_buff[0] = header.bytes[0];
 		head_buff[1] = header.bytes[1];
-		memcpy(head_buff + 2, q -> payload, q -> len);
+		if (q -> len > 0){
+			memcpy(head_buff + 2, q -> payload, q -> len);
+		}
 		out -> len = q -> len + 2;
 	}
 	else if (q -> len <= MAX_PAYLOAD_LEN){
@@ -754,9 +761,9 @@ void add_ws_header(ws_queue_item_t *q, ws_send_data *out){
 int8_t ws_server_init(uint16_t port){
 	int8_t ret;
 
-	//ws_server_handler = NULL;
 	xServerMutex = xSemaphoreCreateMutex();
 	xSendMutex = xSemaphoreCreateMutex();
+	ws_port = port;
 
 	if (ws_server_is_running == 0){
 		vTaskDelay(1000 / portTICK_PERIOD_MS);

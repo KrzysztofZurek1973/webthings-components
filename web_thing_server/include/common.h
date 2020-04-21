@@ -54,9 +54,9 @@ typedef enum {
 }RESOURCE_TYPE;
 
 typedef enum{
-	CONN_UNKNOWN,
-	CONN_HTTP,
-	CONN_WS
+	CONN_UNKNOWN = 0,
+	CONN_HTTP = 1,
+	CONN_WS = 2
 } conn_type; //connection type
 
 typedef struct thing_t thing_t;
@@ -77,6 +77,7 @@ typedef struct{
 	uint32_t ws_pongs;
 	uint32_t packets;
 	uint32_t bytes;
+	uint32_t send_errors;
 	uint8_t index;
 	thing_t *thing; //used with ws
 	CONN_RUNING run;
