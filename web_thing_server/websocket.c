@@ -26,14 +26,12 @@
 
 #define MAX_PAYLOAD_LEN		1024
 #define SHA1_RES_LEN		20	//sha1 result length
-#define CLOSE_TIMEOUT_MS	2000 //ms
+#define CLOSE_TIMEOUT_MS	5000 //ms
 
 //global server variables
 static int8_t ws_server_is_running = 0;
 static uint16_t ws_port = 0;
 xQueueHandle ws_output_queue;
-static xSemaphoreHandle xServerMutex; //TODO: check if needed
-static xSemaphoreHandle xSendMutex; //TODO: check if needed
 
 //websocket task functions
 //static void ws_receive_task(void* arg);
@@ -42,7 +40,7 @@ static uint8_t head_buff[MAX_PAYLOAD_LEN + 4]; //sending buffer
 
 //functions prototypes
 void add_ws_header(ws_queue_item_t *q, ws_send_data *ws_data);
-uint8_t close_ws(uint16_t error_nr, connection_desc_t *conn_desc);
+int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc);
 int8_t ws_handshake(char *rq, connection_desc_t *conn_desc, ws_queue_item_t *ws_item);
 void vCloseTimeoutCallback(TimerHandle_t xTimer);
 int8_t set_property(char *rq, thing_t *t, uint16_t tcp_len);
@@ -284,6 +282,11 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	opcode = 0;
 	msg_ok = 0;
 
+	if (conn_desc -> conn_state == WS_CLOSING){
+		//ignore received messages in CLOSING state
+		goto ws_receive_end;
+	}
+
 	//read data from input buffer
 	if (conn_desc -> conn_state != WS_CLOSED){
 		//receive websocket data from client
@@ -298,7 +301,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			finish = ws_header -> fin;
 			if (finish == 0x0){
 				//fragmentation not supported
-				close_ws(1007, conn_desc);
+				ws_close(1007, conn_desc);
 				return -1;
 			}
 			offset = 2;
@@ -307,13 +310,13 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				ws_len = (rq[offset] << 8) + rq[offset + 1];
 				offset = 4;
 				if (ws_len > MAX_PAYLOAD_LEN){
-					close_ws(1009, conn_desc);
+					ws_close(1009, conn_desc);
 					return -1;
 				}
 			}
 			else if (ws_len == 127){
 				//64bit addresses are not supported
-				close_ws(1009, conn_desc);
+				ws_close(1009, conn_desc);
 				return -1;
 			}
 			mask = ws_header -> mask;
@@ -348,7 +351,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			else if (msg_start > ws_len){
 				//message length error, close connection
 				printf("msg length error, %i, %i\n", msg_start, ws_len);
-				close_ws(1011, conn_desc);
+				ws_close(1011, conn_desc);
 				free(msg);
 				return -1;
 			}
@@ -374,12 +377,12 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				break;
 			case WS_OP_CLS:
 				//close connection
-				printf("close WS connection, index = %i\n", conn_desc -> index);
+				//printf("close WS connection, index = %i\n", conn_desc -> index);
 				delete_subscriber(conn_desc);
-				close_ws((msg[0] << 8) + msg[1], conn_desc);
+				ws_close((msg[0] << 8) + msg[1], conn_desc);
 				break;
 			case WS_OP_PIN:
-				//ping control frame
+				//ping control frame, answer with "pong"
 				ws_item = malloc(sizeof(ws_queue_item_t));
 				if (ws_len == 0){
 					ws_item -> payload = NULL;
@@ -392,10 +395,11 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				ws_item -> opcode = WS_OP_PON;
 				ws_item -> ws_frame = 0x1;
 				ws_item -> text = 0x0;
-				//increment ping number
-				//printf("ws ping: %i\n", conn_desc -> ws_pings);
 				free_msg = false;
-				//send pong
+
+				xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
+				conn_desc -> msg_to_send++;
+				xSemaphoreGive(conn_desc -> mutex);
 				xQueueSend(ws_output_queue, &ws_item, portMAX_DELAY);
 				break;
 			case WS_OP_PON:
@@ -406,7 +410,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			default:
 				//TODO: what to do if happen?
 				printf("incorrect opcode received: %X\n", opcode);
-				close_ws(1008, conn_desc);
+				ws_close(1008, conn_desc);
 				//free(msg);
 				break;
 			}
@@ -422,6 +426,10 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			if (ws_item != NULL){
 				uint8_t res = ws_handshake(rq, conn_desc, ws_item);
 				if (res == 1){
+					xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
+					conn_desc -> msg_to_send++;
+					xSemaphoreGive(conn_desc -> mutex);
+					
 					xQueueSendToFront(ws_output_queue, &ws_item, portMAX_DELAY);
 
 					//get thing number from url
@@ -484,6 +492,8 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	default:
 		conn_desc -> run = CONN_STOP;
 	}//switch(ws_state)
+
+ws_receive_end:	
 	if (free_msg == true){
 		free(msg);
 	}
@@ -588,13 +598,46 @@ int8_t ws_handshake(char *rq, connection_desc_t *conn_desc, ws_queue_item_t *ws_
 	return ret;
 }
 
+
+//create and start time-out timer for ending connection 
+int8_t create_connection_timeout(connection_desc_t *conn_desc){
+	int *index;
+	TimerHandle_t timeout_timer;
+	
+	index = malloc(sizeof(int));
+	*index = (int)(conn_desc -> index);
+
+	timeout_timer = xTimerCreate("timeout", pdMS_TO_TICKS(CLOSE_TIMEOUT_MS),
+					pdFALSE, (void *)index,
+					vCloseTimeoutCallback);
+
+	conn_desc -> timer_handl = timeout_timer;
+	//if (conn_desc -> conn_state == WS_OPEN){
+		//conn_desc -> conn_state = WS_CLOSING;
+	//}
+	//else{
+	//	conn_desc -> conn_state = WS_CLOSED;
+	//	conn_desc -> netconn_ptr = NULL;
+	//	printf("conn closed, index = %i\n", conn_desc -> index);
+	//}
+	//start timer
+	xTimerStart(timeout_timer, 0);
+	
+	return 1;
+}
+
 // ****************************************************************************
 //close websocket
-uint8_t close_ws(uint16_t error_nr, connection_desc_t *conn_desc){
+int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	char *payload;
 	ws_queue_item_t *ws_item;
-	TimerHandle_t timeout_timer;
+	
 
+	if (conn_desc -> conn_state == WS_CLOSING){
+		return -1;
+	}
+	
+	conn_desc -> conn_state = WS_CLOSING;
 	printf("connection will be closed, i = %i\n", conn_desc -> index);
 
 	//prepare close frame with close code
@@ -608,31 +651,19 @@ uint8_t close_ws(uint16_t error_nr, connection_desc_t *conn_desc){
 	ws_item -> opcode = WS_OP_CLS; //close
 	ws_item -> ws_frame = 0x1;
 	ws_item -> conn_desc = conn_desc;
+	
+	xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
+	conn_desc -> msg_to_send++;
+	xSemaphoreGive(conn_desc -> mutex);
+	
 	xQueueSend(ws_output_queue, &ws_item, portMAX_DELAY);
 
 	//create time-out timer
-	int *index;
-	index = malloc(sizeof(int));
-	*index = (int)(conn_desc -> index);
-
-	timeout_timer = xTimerCreate("timeout", pdMS_TO_TICKS(CLOSE_TIMEOUT_MS),
-					pdFALSE, (void *)index,
-					vCloseTimeoutCallback);
-
-	conn_desc -> timer_handl = timeout_timer;
-	if (conn_desc -> conn_state == WS_OPEN){
-		conn_desc -> conn_state = WS_CLOSING;
-	}
-	else{
-		conn_desc -> conn_state = WS_CLOSED;
-		conn_desc -> netconn_ptr = NULL;
-		printf("conn closed, index = %i\n", conn_desc -> index);
-	}
-	//start timer
-	xTimerStart(timeout_timer, 0);
+	create_connection_timeout(conn_desc);
 
 	return 1;
 }
+
 
 // ****************************************************************************
 //closing timer callback
@@ -640,16 +671,24 @@ void vCloseTimeoutCallback( TimerHandle_t xTimer ){
 	uint8_t index;
 	connection_desc_t *conn_desc;
 
+	//printf("vCloseTimeoutCallback\n");
+
 	index = *(uint8_t *) pvTimerGetTimerID(xTimer);
 	free(pvTimerGetTimerID(xTimer));
 
 	conn_desc = &connection_tab[index];
 	
-	//clear connection resources 
+	//clear connection resources
+	while (conn_desc -> msg_to_send > 0){
+		//wait until all messages are sent
+		vTaskDelay(1000 / portTICK_PERIOD_MS);
+	}
+	
 	close_thing_connection(conn_desc, "TIME OUT");
 		
 	xTimerDelete(xTimer, 100);
 }
+
 
 // ****************************************************************************
 //prepare websocket header and send data to client
@@ -674,6 +713,11 @@ static void ws_send_task(void* arg){
 		conn_desc = q_item -> conn_desc;
 		free(q_item -> payload);
 
+		//check if connection is not deleted
+		if (conn_desc -> netconn_ptr == NULL){
+			goto ws_send_connection_deleted;
+		}
+		
 		//send data to the client
 		state = conn_desc -> conn_state;
 		if ((state == WS_OPEN) || (state == WS_OPENING) || (state == WS_CLOSING)){
@@ -681,22 +725,36 @@ static void ws_send_task(void* arg){
 						ws_data.payload,
 						ws_data.len,
 						NETCONN_COPY);
+			//decrement nr of messages to send for this connection
+			xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
+			conn_desc -> msg_to_send--;
+			xSemaphoreGive(conn_desc -> mutex);
+			
+			if (conn_desc -> msg_to_send < 0){
+				printf("msg to send ERROR: %i\n", conn_desc -> msg_to_send);
+			}
 			
 			if (err != ERR_OK){
-				conn_desc -> send_errors++;
-				//TODO: what if answer for open handshake was not sent?
-				printf("data not sent to one, index = %i, err = %i, \ndata:%s\n",
-						conn_desc -> index, err, (char *)ws_data.payload);
-				if (conn_desc -> send_errors >= 3){
-					printf("WS SEND: too much errors\n");
-					close_thing_connection(conn_desc, "WS_SEND_ERR");
-					//trigger mDNS announcment
-					//printf("trigger mDNS announcement\n");
-					//mdns_service_port_set("_webthing", "_tcp", ws_port);
+				if (state != WS_CLOSING){
+					conn_desc -> send_errors++;
+					//TODO: what if answer for open handshake was not sent?
+					printf("data not sent to one, index = %i, err = %i, \ndata:%s\n",
+							conn_desc -> index, err, (char *)ws_data.payload);
+					if (conn_desc -> send_errors >= 3){
+						printf("WS SEND: too much errors\n");
+						conn_desc -> conn_state = WS_CLOSING;
+						create_connection_timeout(conn_desc);
+						//if (conn_desc -> msg_to_send == 0){
+						//	close_thing_connection(conn_desc, "WS_SEND_ERR");
+						//}
+					}
 				}
 			}
 			else{
-				conn_desc -> send_errors = 0;
+				if (conn_desc -> send_errors > 0){
+					conn_desc -> send_errors--;
+				}
+				
 				if (conn_desc -> conn_state == WS_OPENING){
 					conn_desc -> conn_state = WS_OPEN;
 				}
@@ -713,7 +771,7 @@ static void ws_send_task(void* arg){
 		else{
 			printf("ERROR by sending data: websocket incorrect state\n");
 		}
-
+ws_send_connection_deleted:
 		free(q_item);
 	}
 }
@@ -762,8 +820,6 @@ void add_ws_header(ws_queue_item_t *q, ws_send_data *out){
 int8_t ws_server_init(uint16_t port){
 	int8_t ret;
 
-	xServerMutex = xSemaphoreCreateMutex();
-	xSendMutex = xSemaphoreCreateMutex();
 	ws_port = port;
 
 	if (ws_server_is_running == 0){
@@ -792,10 +848,23 @@ int8_t ws_server_init(uint16_t port){
 }
 
 
-// ****************************************************************************
-//send data via websocket
+// ***************************************************************
+//
+// send data via websocket
+// for external usage only (for web things)
+// don't use for opening/closing websocket connection!
+//
+// ***********************************************************
 int8_t ws_send(ws_queue_item_t *item, int32_t wait_ms){
-
+	
+	if (item -> conn_desc -> conn_state != WS_OPEN){
+		return -1;
+	}
+	
+	xSemaphoreTake(item -> conn_desc -> mutex, portMAX_DELAY);
+	item -> conn_desc -> msg_to_send++;
+	xSemaphoreGive(item -> conn_desc -> mutex);
+	
 	return xQueueSend(ws_output_queue, &item, wait_ms / portTICK_RATE_MS);
 }
 

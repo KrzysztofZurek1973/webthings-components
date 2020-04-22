@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "lwip/api.h"
 #include "freertos/timers.h"
+#include "freertos/semphr.h"
 
 #define MAX_OPEN_CONN 10	//max number of open connections
 
@@ -78,10 +79,12 @@ typedef struct{
 	uint32_t packets;
 	uint32_t bytes;
 	uint32_t send_errors;
+	int32_t msg_to_send;
 	uint8_t index;
 	thing_t *thing; //used with ws
 	CONN_RUNING run;
 	uint8_t conn_state;
+	xSemaphoreHandle mutex;
 } connection_desc_t;
 
 #endif /* COMMON_H_ */
