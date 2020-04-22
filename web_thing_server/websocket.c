@@ -696,6 +696,7 @@ static void ws_send_task(void* arg){
 				}
 			}
 			else{
+				conn_desc -> send_errors = 0;
 				if (conn_desc -> conn_state == WS_OPENING){
 					conn_desc -> conn_state = WS_OPEN;
 				}
