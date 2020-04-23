@@ -40,6 +40,7 @@ static xTaskHandle server_task_handle;
 static struct netconn *server_conn;
 root_node_t root_node; //http parser uses it
 connection_desc_t connection_tab[MAX_OPEN_CONN];
+static xSemaphoreHandle connection_mux = NULL;
 
 //functions
 int8_t send_websocket_msg(thing_t *t, char *buff, int len);
@@ -75,11 +76,11 @@ int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 			delete_subscriber(conn_desc);
 		}
 		//delete mutex
-		if (conn_desc -> mutex != NULL){
-			xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
-			xSemaphoreGive(conn_desc -> mutex);
-			vSemaphoreDelete(conn_desc -> mutex);
-		}
+		//if (conn_desc -> mutex != NULL){
+		//	xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
+		//	xSemaphoreGive(conn_desc -> mutex);
+		//	vSemaphoreDelete(conn_desc -> mutex);
+		//}
 	}
 	//else{
 	//	printf("%s, connection already deleted\n", tag);
@@ -140,7 +141,7 @@ static void connection_task(void *arg){
 			//connection is closed
 			conn_desc -> run = CONN_STOP;
 			if (net_err == ERR_CLSD){
-				//printf("TCP was closed by client\n");
+				printf("TCP was closed by client\n");
 			}
 			else{
 				printf("\"netconn_recv\" index: %i, ERROR = %i\n", index, net_err);
@@ -176,6 +177,9 @@ static void server_main_task(void* arg){
 
 	cfg = (server_cfg_t *)arg;
 	port = cfg -> port;
+	
+	//cennection mutex
+	connection_mux = xSemaphoreCreateMutex();
 
 	//set up new TCP listener
 	server_conn = netconn_new(NETCONN_TCP);
@@ -207,7 +211,7 @@ static void server_main_task(void* arg){
 				connection_tab[index].run = CONN_RUN;
 				connection_tab[index].thing = NULL;
 				connection_tab[index].bytes = 0;
-				connection_tab[index].mutex = xSemaphoreCreateMutex();
+				connection_tab[index].mutex = connection_mux;
 				
 				BaseType_t xret;
 				xret = xTaskCreate(connection_task, "conn_task", 1024*6,

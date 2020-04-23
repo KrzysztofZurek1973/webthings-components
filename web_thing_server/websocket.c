@@ -659,7 +659,7 @@ int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	xQueueSend(ws_output_queue, &ws_item, portMAX_DELAY);
 
 	//create time-out timer
-	create_connection_timeout(conn_desc);
+	//create_connection_timeout(conn_desc);
 
 	return 1;
 }
@@ -715,6 +715,7 @@ static void ws_send_task(void* arg){
 
 		//check if connection is not deleted
 		if (conn_desc -> netconn_ptr == NULL){
+			printf("ws_send: connection DELETED\n");
 			goto ws_send_connection_deleted;
 		}
 		
@@ -725,6 +726,7 @@ static void ws_send_task(void* arg){
 						ws_data.payload,
 						ws_data.len,
 						NETCONN_COPY);
+						
 			//decrement nr of messages to send for this connection
 			xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
 			conn_desc -> msg_to_send--;
@@ -744,10 +746,10 @@ static void ws_send_task(void* arg){
 						printf("WS SEND: too much errors\n");
 						conn_desc -> conn_state = WS_CLOSING;
 						create_connection_timeout(conn_desc);
-						//if (conn_desc -> msg_to_send == 0){
-						//	close_thing_connection(conn_desc, "WS_SEND_ERR");
-						//}
 					}
+				}
+				else{
+					printf("WS_CLOSING send error, %i\n", err);
 				}
 			}
 			else{
@@ -758,8 +760,13 @@ static void ws_send_task(void* arg){
 				if (conn_desc -> conn_state == WS_OPENING){
 					conn_desc -> conn_state = WS_OPEN;
 				}
+				else if (conn_desc -> conn_state == WS_CLOSING){
+					create_connection_timeout(conn_desc);
+				}
+				
 				conn_desc -> packets++;
 				conn_desc -> bytes += ws_data.len;
+				
 				if (q_item -> opcode == WS_OP_PON){
 					conn_desc -> ws_pongs++;
 				}
