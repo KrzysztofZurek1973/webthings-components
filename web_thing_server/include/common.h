@@ -43,8 +43,9 @@ typedef enum {
 
 // connection run state
 typedef enum {
-	CONN_STOP = 0x0,
-	CONN_RUN = 0x1
+	CONN_DELETED = -1,
+	CONN_STOP = 0,
+	CONN_RUN = 1
 } CONN_RUNING;
 
 typedef enum {
@@ -84,6 +85,7 @@ typedef struct{
 	thing_t *thing; //used with ws
 	CONN_RUNING run;
 	uint8_t conn_state;
+	bool deleted;
 	xSemaphoreHandle mutex;
 } connection_desc_t;
 

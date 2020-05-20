@@ -47,7 +47,7 @@ void initialize_mdns(char *_hostname, bool ap, uint16_t port){
     //structure with TXT records
     itoa(port, port_buff, 10);
     mdns_txt_item_t serviceTxtData[2] = {
-        {"port",port_buff},
+        {"port", port_buff},
         {"path","/"}
     };
 

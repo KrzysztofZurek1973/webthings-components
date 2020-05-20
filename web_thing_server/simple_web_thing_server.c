@@ -14,6 +14,8 @@
 #include <sys/param.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,10 +31,6 @@
 #include "http_parser.h"
 #include "common.h"
 
-#define MAX_PAYLOAD_LEN		1024
-//#define SHA1_RES_LEN		20	//sha1 result length
-#define CLOSE_TIMEOUT_MS	2000 //ms
-
 #define WS_UPGRADE "Upgrade: websocket"
 
 //global server variables
@@ -41,9 +39,25 @@ static struct netconn *server_conn;
 root_node_t root_node; //http parser uses it
 connection_desc_t connection_tab[MAX_OPEN_CONN];
 static xSemaphoreHandle connection_mux = NULL;
+static xSemaphoreHandle server_mux = NULL;
+static xSemaphoreHandle close_conn_mux = NULL;
 
 //functions
 int8_t send_websocket_msg(thing_t *t, char *buff, int len);
+
+/*****************************************************
+*
+* get server time in format: 2020/05/20 13:07:15
+*
+*******************************************************/
+void get_server_time(char *time_buff, uint32_t buff_len){
+	time_t now;
+	struct tm timeinfo;
+	
+	time(&now);
+	localtime_r(&now, &timeinfo);
+	strftime(time_buff, buff_len, "%Y/%m/%d %H:%M:%S", &timeinfo);
+}
 
 
 /*********************************************************
@@ -54,40 +68,47 @@ int8_t send_websocket_msg(thing_t *t, char *buff, int len);
 int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 	struct netconn *conn_ptr;
 	err_t err;
-	//uint8_t index;
+	uint8_t index;
+	char time_buffer[20];
 	
-	//index = conn_desc -> index;
-	conn_ptr = conn_desc -> netconn_ptr;
-	if (conn_ptr != NULL){
-		//printf("%s: CLOSE CONNECTION, index = %i, type: %i\n",
-		//		tag,
-		//		index,
-		//		conn_desc -> type);
-		//close TCP connection
-		if ((err = netconn_close(conn_ptr)) != ERR_OK){
-			printf("%s \"netconn_close\" ERROR: %i\n", tag, err);
-		}
+	xSemaphoreTake(close_conn_mux, portMAX_DELAY);
+	if (conn_desc -> deleted != true){
+		conn_desc -> deleted = true;
+		index = conn_desc -> index;
+		conn_ptr = conn_desc -> netconn_ptr;
 	
-		if (netconn_delete(conn_ptr) != ERR_OK){
-			printf("%s \"netconn_delete\" ERROR: %i\n", tag, err);
+		if (conn_ptr != NULL){
+			get_server_time(time_buffer, sizeof(time_buffer));
+			printf("%s, %s: CLOSE CONNECTION, index = %i, type: %i\n",
+					time_buffer,
+					tag,
+					index,
+					conn_desc -> type);
+
+			//close TCP connection
+			if ((err = netconn_close(conn_ptr)) != ERR_OK){
+				printf("%s \"netconn_close\" ERROR: %i\n", tag, err);
+			}
+		
+			if ((err = netconn_delete(conn_ptr)) != ERR_OK){
+				printf("%s \"netconn_delete\" ERROR: %i\n", tag, err);
+			}
+			//delete subscriber
+			if (conn_desc -> type == CONN_WS){
+				delete_subscriber(conn_desc);
+			}
 		}
-		//delete subscriber
-		if (conn_desc -> type == CONN_WS){
-			delete_subscriber(conn_desc);
-		}
-		//delete mutex
-		//if (conn_desc -> mutex != NULL){
-		//	xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
-		//	xSemaphoreGive(conn_desc -> mutex);
-		//	vSemaphoreDelete(conn_desc -> mutex);
-		//}
+		//clear record in connection table
+		xSemaphoreTake(server_mux, portMAX_DELAY);
+		//memset(conn_desc, 0, sizeof(connection_desc_t));
+		conn_desc -> netconn_ptr = NULL;
+		xSemaphoreGive(server_mux);
 	}
-	//else{
-	//	printf("%s, connection already deleted\n", tag);
-	//}
+	else{
+		printf("connection already deleted\n");
+	}
+	xSemaphoreGive(close_conn_mux);
 	
-	//clear record in connection table
-	memset(conn_desc, 0, sizeof(connection_desc_t));
 	return 1;
 }
 
@@ -140,11 +161,15 @@ static void connection_task(void *arg){
 		else{
 			//connection is closed
 			conn_desc -> run = CONN_STOP;
+			char time_buffer[20];
+			get_server_time(time_buffer, sizeof(time_buffer));
+			
 			if (net_err == ERR_CLSD){
-				printf("TCP was closed by client\n");
+				printf("%s, TCP was closed by client\n", time_buffer);
 			}
 			else{
-				printf("\"netconn_recv\" index: %i, ERROR = %i\n", index, net_err);
+				printf("%s, \"netconn_recv\" index: %i, ERROR = %i\n",
+						time_buffer, index, net_err);
 			}
 
 		}
@@ -180,6 +205,8 @@ static void server_main_task(void* arg){
 	
 	//cennection mutex
 	connection_mux = xSemaphoreCreateMutex();
+	server_mux = xSemaphoreCreateMutex();
+	close_conn_mux = xSemaphoreCreateMutex();
 
 	//set up new TCP listener
 	server_conn = netconn_new(NETCONN_TCP);
@@ -192,13 +219,19 @@ static void server_main_task(void* arg){
 		if (netconn_accept(server_conn, &newconn) == ERR_OK){
 			//check if there is a place for next client
 			index = -1;
+			xSemaphoreTake(server_mux, portMAX_DELAY);
 			for (int i = 0; i < MAX_OPEN_CONN; i++){
 				if (connection_tab[i].netconn_ptr == NULL){
 					index = i;
 					break;
 				}
 			}
-			printf("new client connected, index: %i\n", index);
+			xSemaphoreGive(server_mux);
+			
+			char time_buffer[20];
+			get_server_time(time_buffer, sizeof(time_buffer));
+			printf("%s, new client connected, index: %i\n", time_buffer, index);
+			
 			if (index > -1){
 				connection_tab[index].type = CONN_UNKNOWN;
 				connection_tab[index].netconn_ptr = newconn;
@@ -211,6 +244,7 @@ static void server_main_task(void* arg){
 				connection_tab[index].run = CONN_RUN;
 				connection_tab[index].thing = NULL;
 				connection_tab[index].bytes = 0;
+				connection_tab[index].deleted = false;
 				connection_tab[index].mutex = connection_mux;
 				
 				BaseType_t xret;

@@ -612,14 +612,6 @@ int8_t create_connection_timeout(connection_desc_t *conn_desc){
 					vCloseTimeoutCallback);
 
 	conn_desc -> timer_handl = timeout_timer;
-	//if (conn_desc -> conn_state == WS_OPEN){
-		//conn_desc -> conn_state = WS_CLOSING;
-	//}
-	//else{
-	//	conn_desc -> conn_state = WS_CLOSED;
-	//	conn_desc -> netconn_ptr = NULL;
-	//	printf("conn closed, index = %i\n", conn_desc -> index);
-	//}
 	//start timer
 	xTimerStart(timeout_timer, 0);
 	
@@ -638,7 +630,9 @@ int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	}
 	
 	conn_desc -> conn_state = WS_CLOSING;
-	printf("connection will be closed, i = %i\n", conn_desc -> index);
+	printf("ws will be closed, index = %i, type = %i\n",
+			conn_desc -> index,
+			conn_desc -> type);
 
 	//prepare close frame with close code
 	payload = malloc(2);
@@ -657,9 +651,6 @@ int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	xSemaphoreGive(conn_desc -> mutex);
 	
 	xQueueSend(ws_output_queue, &ws_item, portMAX_DELAY);
-
-	//create time-out timer
-	//create_connection_timeout(conn_desc);
 
 	return 1;
 }
@@ -722,11 +713,6 @@ static void ws_send_task(void* arg){
 		//send data to the client
 		state = conn_desc -> conn_state;
 		if ((state == WS_OPEN) || (state == WS_OPENING) || (state == WS_CLOSING)){
-			err_t err = netconn_write(conn_desc -> netconn_ptr,
-						ws_data.payload,
-						ws_data.len,
-						NETCONN_COPY);
-						
 			//decrement nr of messages to send for this connection
 			xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
 			conn_desc -> msg_to_send--;
@@ -735,6 +721,11 @@ static void ws_send_task(void* arg){
 			if (conn_desc -> msg_to_send < 0){
 				printf("msg to send ERROR: %i\n", conn_desc -> msg_to_send);
 			}
+			
+			err_t err = netconn_write(conn_desc -> netconn_ptr,
+										ws_data.payload,
+										ws_data.len,
+										NETCONN_COPY);
 			
 			if (err != ERR_OK){
 				if (state != WS_CLOSING){
