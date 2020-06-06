@@ -357,7 +357,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			}
 		}
 		else{
-			if ((ws_len == 0) && (opcode == WS_OP_PIN)){
+			if ((ws_len == 0) && (opcode == WS_OP_PIN || opcode == WS_OP_CLS)){
 				//ping messages
 				msg_ok = 1;
 			}
@@ -379,7 +379,13 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				//close connection
 				//printf("close WS connection, index = %i\n", conn_desc -> index);
 				delete_subscriber(conn_desc);
-				ws_close((msg[0] << 8) + msg[1], conn_desc);
+				if (ws_len > 0){
+					ws_close((msg[0] << 8) + msg[1], conn_desc);
+				}
+				else{
+					ws_close(0, conn_desc);
+				}
+				printf("close WS, ws_len = %i\n", ws_len);
 				break;
 			case WS_OP_PIN:
 				//ping control frame, answer with "pong"
@@ -623,6 +629,7 @@ int8_t create_connection_timeout(connection_desc_t *conn_desc){
 int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	char *payload;
 	ws_queue_item_t *ws_item;
+	int16_t len;
 	
 
 	if (conn_desc -> conn_state == WS_CLOSING){
@@ -630,18 +637,26 @@ int8_t ws_close(uint16_t error_nr, connection_desc_t *conn_desc){
 	}
 	
 	conn_desc -> conn_state = WS_CLOSING;
-	printf("ws will be closed, index = %i, type = %i\n",
+	printf("ws will be closed, index: %i, type: %i, error: %i\n",
 			conn_desc -> index,
-			conn_desc -> type);
+			conn_desc -> type,
+			error_nr);
 
 	//prepare close frame with close code
-	payload = malloc(2);
-	payload[0] = error_nr >> 8;
-	payload[1] = error_nr;
+	if (error_nr == 0){
+		len = 0;
+		payload = NULL;
+	}
+	else{
+		len = 2;
+		payload = malloc(2);
+		payload[0] = error_nr >> 8;
+		payload[1] = error_nr;
+	}
 
 	ws_item = malloc(sizeof(ws_queue_item_t));
 	ws_item -> payload = (uint8_t *)payload;
-	ws_item -> len = 2;
+	ws_item -> len = len;
 	ws_item -> opcode = WS_OP_CLS; //close
 	ws_item -> ws_frame = 0x1;
 	ws_item -> conn_desc = conn_desc;
