@@ -47,10 +47,28 @@ typedef enum {
 	WS_OPENING = 0x3
 } WS_STATE;
 
+// ws close handshake initiator
+typedef enum {
+	WS_CLOSE_BY_NOBODY = 0,
+	WS_CLOSE_BY_SERVER = 1,
+	WS_CLOSE_BY_CLIENT = 2
+} WS_CLOSE_INITIATOR;
+
+typedef enum {
+	NORMAL_CLOSE	= 1000,
+	GOING_AWAY		= 1001,
+	PROTOCOL_ERR	= 1002,
+	INCORRECT_DATA	= 1003,
+	ABNORMAL_CLS	= 1006,
+	DATA_INCONSIST	= 1007,
+	POLICY_ERR		= 1008,
+	DATA_TO_BIG		= 1009,
+	SERVER_ERR		= 1011
+} WS_STATUS_CODE;
+
 typedef struct{
 	uint8_t *payload;
 	uint16_t len;
-	//int8_t index;
 	connection_desc_t *conn_desc;
 	WS_OPCODES opcode:4;
 	uint8_t ws_frame:1; //ws - 1, non ws - 0

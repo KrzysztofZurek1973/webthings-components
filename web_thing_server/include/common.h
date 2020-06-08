@@ -71,21 +71,23 @@ struct at_type_t{
 };
 
 typedef struct{
-	conn_type type;
+	conn_type	type;
 	struct netconn *netconn_ptr;
 	xTaskHandle task_handl;
 	TimerHandle_t timer_handl;
-	uint32_t ws_pings;
-	uint32_t ws_pongs;
-	uint32_t packets;
-	uint32_t bytes;
-	uint32_t send_errors;
-	int32_t msg_to_send;
-	uint8_t index;
-	thing_t *thing; //used with ws
+	uint32_t	ws_pings;
+	uint32_t	ws_pongs;
+	uint8_t		ws_close_initiator;
+	uint16_t	ws_status_code;
+	uint32_t	packets;
+	uint32_t	bytes;
+	uint32_t	send_errors;
+	int8_t		msg_to_send;
+	uint8_t		index;
+	thing_t		*thing;
 	CONN_RUNING run;
-	uint8_t conn_state;
-	bool deleted;
+	uint8_t		conn_state;
+	bool		deleted;
 	xSemaphoreHandle mutex;
 } connection_desc_t;
 

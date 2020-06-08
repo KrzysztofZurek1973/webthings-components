@@ -102,6 +102,7 @@ int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 		xSemaphoreTake(server_mux, portMAX_DELAY);
 		//memset(conn_desc, 0, sizeof(connection_desc_t));
 		conn_desc -> netconn_ptr = NULL;
+		conn_desc -> timer_handl = NULL;
 		xSemaphoreGive(server_mux);
 	}
 	else{
