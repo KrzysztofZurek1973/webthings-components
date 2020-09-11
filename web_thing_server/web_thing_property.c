@@ -95,8 +95,8 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 	sprintf(th_lk, "/%i/", thing_index);
 
 	//clear buffers
-	buff1 = malloc(100);
-	memset(buff1, 0, 100);
+	buff1 = malloc(200);
+	memset(buff1, 0, 200);
 	memset(buff_min, 0, 15);
 	memset(buff_max, 0, 15);
 
@@ -168,7 +168,7 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 	}
 
 	if (build_json == true){
-		buff = malloc(400);
+		buff = malloc(600);
 		if (buff_enum != NULL){
 			sprintf(buff, prop_str, p -> id, p -> at_type -> at_type, p -> title,
 					type[p -> type], buff_enum, p -> description, buff1,

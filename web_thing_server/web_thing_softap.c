@@ -36,7 +36,7 @@
 #define MAX_WIFI_STA_CONN	1
 
 const char *WIFI_AP_TAG = "wifi softAP";
-static EventGroupHandle_t ap_wifi_event_group;
+//static EventGroupHandle_t ap_wifi_event_group;
 static void ap_event_handler(void* arg, esp_event_base_t event_base, 
                                 int32_t event_id, void* event_data);
 
@@ -64,18 +64,15 @@ char ap_res_header_ok[] = "HTTP/1.1 204 NO CONTENT\r\n";
  * initialize wifi software Access Point
  *
  * ***************************************************************/
-void wifi_init_softap()
-{
-    ap_wifi_event_group = xEventGroupCreate();
+void wifi_init_softap(){   
 
-	tcpip_adapter_init();
-    //esp_netif_init();
-    //ESP_ERROR_CHECK(esp_event_loop_init(ap_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    //esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &ap_event_handler, NULL));
     
     wifi_config_t wifi_config = {
@@ -142,9 +139,7 @@ void ap_server_task(void* arg){
 	char *rq = NULL;
 	int counter = 0;
 	struct netconn *server_conn;
-	//bool *node_restart;
 
-	//node_restart = (bool *)arg;
 	//set up TCP listener
 	server_conn = netconn_new(NETCONN_TCP);
 	netconn_bind(server_conn, NULL, port);
