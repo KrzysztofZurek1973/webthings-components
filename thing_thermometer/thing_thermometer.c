@@ -29,6 +29,9 @@
 #include "owb_rmt.h"
 #include "ds18b20.h"
 
+//include dummy or real OTA updater
+#include "esp32_ota_updater.h"
+
 //1-wire DS18B20, digital temperature sensor constants
 #define GPIO_DS18B20_0       	(CONFIG_ONE_WIRE_GPIO)
 #define MAX_DEVICES          	(3)
@@ -209,22 +212,27 @@ void thermometer_fun(void *param){
 					}
 				}
 				//set new correctness
-				temp_correctness = (100 * correct_samples)/TEMP_SAMPLES;
-				if (temp_correctness != old_temp_correctness){
-					inform_all_subscribers_prop(prop_correctness);
-					old_temp_correctness = temp_correctness;
+#ifdef CONFIG_ENABLE_OTA_UPDATE
+				if (ota_update_block() == OTA_BLOCK_OK){
+#endif
+					temp_correctness = (100 * correct_samples)/TEMP_SAMPLES;
+					if (temp_correctness != old_temp_correctness){
+						inform_all_subscribers_prop(prop_correctness);
+						old_temp_correctness = temp_correctness;
+					}
+					//set new errors
+					if (temp_errors != old_temp_errors){
+						inform_all_subscribers_prop(prop_errors);
+						old_temp_errors = temp_errors;
+					}
+#ifdef CONFIG_ENABLE_OTA_UPDATE
 				}
-				//set new errors
-				if (temp_errors != old_temp_errors){
-					inform_all_subscribers_prop(prop_errors);
-					old_temp_errors = temp_errors;
-				}
+				ota_update_unblock();
+#endif
 
 				//reset other values
-				//sample_nr = 0;
 				temp_sum = 0;
 				correct_samples = 0;
-				//printf("sample nr: %i\n", sample_nr);
 			}
 
 			vTaskDelayUntil(&last_wake_time, DS18B20_SAMPLE_PERIOD / portTICK_PERIOD_MS);

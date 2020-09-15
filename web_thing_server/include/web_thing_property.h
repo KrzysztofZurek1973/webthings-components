@@ -15,7 +15,7 @@
 #include "web_thing.h"
 #include "common.h"
 
-#define PROP_VAL_LEN 30
+#define PROP_VAL_LEN 50
 
 typedef struct link_t link_t;
 typedef struct enum_item_t enum_item_t;

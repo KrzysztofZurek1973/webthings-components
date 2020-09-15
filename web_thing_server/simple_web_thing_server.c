@@ -370,6 +370,7 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 	thing_t *t;
 	property_t *p;
 	uint16_t n;
+	int len = -1, curr_len = 0, temp_len = 0;
 
 	//find thing
 	t = get_thing_ptr(thing_nr);
@@ -382,13 +383,26 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 			if (name == NULL){
 				//send values of all properties
 				n = t -> prop_quant;
+				len = PROP_VAL_LEN * n;
 				buff = malloc(PROP_VAL_LEN * n);
 				memset(buff, 0, PROP_VAL_LEN * n);
 				buff[0] = '{';
 				p = t -> properties;
 				for (int i = 0; i < n; i++){
 					buff1 = p -> value_jsonize(p);
-					strcpy(buff + strlen(buff), buff1);
+					temp_len = strlen(buff1);
+					if (curr_len + temp_len >= (len - 5)){
+						//allocate new buffer
+						len = curr_len + temp_len + 10;
+						char *new_buff = malloc(len);
+						memset(new_buff, 0, len);
+						strcpy(new_buff, buff);
+						free(buff);
+						buff = new_buff;
+					}
+					curr_len += temp_len;
+					//strcpy(buff + strlen(buff), buff1);
+					strcat(buff, buff1);
 					free(buff1);
 					if (i < (n - 1)){
 						//comma before the next property
@@ -412,6 +426,16 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 					memset(buff, 0, PROP_VAL_LEN);
 					buff[0] = '{';
 					buff1 = p -> value_jsonize(p);
+					temp_len = strlen(buff1);
+					if (temp_len >= (PROP_VAL_LEN - 5)){
+						//allocate new buffer
+						len = curr_len + temp_len + 10;
+						char *new_buff = malloc(len);
+						memset(new_buff, 0, len);
+						strcpy(new_buff, buff);
+						free(buff);
+						buff = new_buff;
+					}
 					strcpy(buff + 1, buff1);
 					free(buff1);
 					buff[strlen(buff)] = '}';

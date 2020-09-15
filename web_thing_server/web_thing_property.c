@@ -11,7 +11,7 @@
 #include "web_thing_property.h"
 #include "common.h"
 
-#define PROP_MODEL_LEN 500
+#define PROP_MODEL_LEN 600
 
 void prop_value_str(property_t *p, char *b);
 char *get_property_json(property_t *p);
@@ -47,8 +47,8 @@ char *get_properties_model(thing_t *t){
 	property_t *p;
 
 	int pq = t -> prop_quant;
-	prop = malloc(pq * PROP_MODEL_LEN);
-	memset(prop, 0, pq * PROP_MODEL_LEN);
+	prop = malloc(pq * (PROP_MODEL_LEN + 5));
+	memset(prop, 0, pq * (PROP_MODEL_LEN + 5));
 
 	p = t -> properties;
 	if (pq > 1){
@@ -168,7 +168,7 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 	}
 
 	if (build_json == true){
-		buff = malloc(600);
+		buff = malloc(PROP_MODEL_LEN);
 		if (buff_enum != NULL){
 			sprintf(buff, prop_str, p -> id, p -> at_type -> at_type, p -> title,
 					type[p -> type], buff_enum, p -> description, buff1,

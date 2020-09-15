@@ -42,7 +42,9 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	//send response - the whole (with http header) is in "rs" buffer,
 	len = strlen(rs);
 	err_t err = netconn_write(conn_desc -> netconn_ptr,
-						rs, len, NETCONN_COPY);
+								rs,
+								len,
+								NETCONN_COPY);
 	if (err != ERR_OK){
 		printf("data not sent\n------\n%s\n-----------\n", rs);
 	}
