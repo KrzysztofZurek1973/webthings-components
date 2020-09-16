@@ -14,9 +14,9 @@
 
 extern root_node_t root_node;
 
-int16_t get_parser(char *rq, char **res, uint16_t things);
-int16_t put_parser(char *rq, char **res, uint16_t things);
-int16_t post_parser(char *rq, char **res, uint16_t things);
+int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len);
+int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t len);
+int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len);
 
 char res_header_ok[] = "HTTP/1.1 200 OK\r\n"\
 						"Content-Type: application/td+json; charset=utf-8\r\n\r\n";
@@ -37,7 +37,7 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	char *rs;
 	int len;
 
-	parse_http_request(rq, &rs);
+	parse_http_request(rq, &rs, tcp_len);
 
 	//send response - the whole (with http header) is in "rs" buffer,
 	len = strlen(rs);
@@ -65,22 +65,22 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 * 	error code or 1 (success)
 * parse html request
 ************************************************************************/
-int16_t parse_http_request(char *rq, char **res){
+int16_t parse_http_request(char *rq, char **res, uint16_t len){
 	int16_t result = 0;
 	char *buff = NULL, *res_buff = NULL, *http_header;
 	int res_len = 0;
 
 	if(rq[0] == 'G' && rq[1] == 'E' && rq[2] == 'T'){
 		//GET request
-		result = get_parser(rq, &buff, root_node.things_quantity);
+		result = get_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else if (rq[0] == 'P' && rq[1] == 'U' && rq[2] == 'T'){
 		//PUT request
-		result = put_parser(rq, &buff, root_node.things_quantity);
+		result = put_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else if (rq[0] == 'P' && rq[1] == 'O' && rq[2] == 'S' && rq[3] == 'T'){
 		//POST request
-		result = post_parser(rq, &buff, root_node.things_quantity);
+		result = post_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else{
 		result = -1;
@@ -128,7 +128,7 @@ int16_t parse_http_request(char *rq, char **res){
  *     -400 - client error
  *     -500 - server error
  ***********************************************************************/
-int16_t post_parser(char *rq, char **res, uint16_t things){
+int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len){
 	int16_t result = 201;
 	char *ptr_1 = NULL, *ptr_2 = NULL;
 	int16_t url_level_len;
@@ -250,9 +250,6 @@ int16_t post_parser(char *rq, char **res, uint16_t things){
 						memcpy(inputs, ptr_5 + 1, len - 1);
 
 						int res = request_action(thing_nr, action_id, inputs);
-						//if (res < 0){
-						//	printf("http_parser ERROR: action not executed!\n");
-						//}
 						if (res >= 0){
 							//prepare http response body
 							res_buff = action_request_jsonize(thing_nr, action_id, res);
@@ -286,15 +283,16 @@ int16_t post_parser(char *rq, char **res, uint16_t things){
 
 /************************************************************************
  * inputs:
- * 		rq - request content
- *  	res - buffer address for response body
- *  	things - things quantity in the node
+ * 		rq		- request content
+ *  	res		- buffer address for response body
+ *  	things	- things quantity in the node
+ *		len		- TCP length
  * output:
- *  	0 - OK
- *     -400 - client error
- *     -500 - server error
+ *  	0		- OK
+ *     -400		- client error
+ *     -500		- server error
  ***********************************************************************/
-int16_t put_parser(char *rq, char **res, uint16_t things){
+int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
 	int16_t result = 0;
 	char *ptr_1 = NULL, *ptr_2 = NULL;
 	int16_t url_level_len;
@@ -389,30 +387,57 @@ int16_t put_parser(char *rq, char **res, uint16_t things){
 				strcpy(url_level_body, url + 1);
 
 				//get new value from message body
-				char *new_value = NULL, *ptr_4 = NULL, *ptr_5 = NULL;
+				char *new_value = NULL, *ptr_4 = NULL;//, *ptr_5 = NULL;
+				char start_char, end_char;
 
 				ptr_4 = strstr(rq, "\r\n\r\n");
 				ptr_4 = strstr(ptr_4, url_level_body);
-				if (ptr_4 != NULL){
-					char *p1, *p2;
-					uint16_t len = 0;
+				if ((ptr_4 != NULL) && (rq[tcp_len-1] == '}')){
+					char *p1;//, *p2;
+					uint16_t buff_len = 0;
+					int i;
 
 					ptr_4 = strstr(ptr_4, ":");
-					ptr_5 = strchr(ptr_4, '\"');
-					if (ptr_5 != NULL){
-						p2 = strchr(ptr_5 + 1, '\"');
-						len = p2 - ptr_5 - 1;
-						p1 = ptr_5 + 1;
+					//char for json object type, fist char after ":"
+					//	< " >	- string
+					//	none 	- number
+					//	< [ >	- array
+					//	< { >	- object
+					start_char = *(ptr_4 + 1);
+					//find last char which closes the json object
+					switch (start_char){
+						case '[':
+							//find "]"
+							end_char = ']';
+							break;
+						case '{':
+							//find "}"
+							end_char = '}';
+							break;
+						case '"':
+							//find '"'
+							end_char = '"';
+							break;
+						default:
+							//numbers
+							end_char = 0;
+					}
+					if (end_char != 0){
+						for (i = tcp_len-2; i > 0; i--){
+							if (rq[i] == end_char){
+								break;
+							}
+						}
 					}
 					else{
-						p2 = strchr(ptr_4 + 1, '}');
-						len = p2 - ptr_4 - 1;
-						p1 = ptr_4 + 1;
+						i = tcp_len - 2;
 					}
+					buff_len = &rq[i] - ptr_4;
+					p1 = ptr_4 + 1;
 
-					new_value = malloc(len + 1);
-					memset(new_value, 0, len + 1);
-					memcpy(new_value, p1, len);
+					new_value = malloc(buff_len + 1);
+					memset(new_value, 0, buff_len + 1);
+					memcpy(new_value, p1, buff_len);
 
 					if (resource == PROPERTY){
 						//call set function for this property
@@ -458,7 +483,7 @@ int16_t put_parser(char *rq, char **res, uint16_t things){
  *  	0 - OK
  *     -1 - error
  ***********************************************************************/
-int16_t get_parser(char *rq, char **res, uint16_t things){
+int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len){
 	int16_t result = 0;
 	char *ptr_1 = NULL, *url_end_ptr = NULL;
 	int16_t url_level_len;

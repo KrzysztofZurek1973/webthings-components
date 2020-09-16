@@ -17,6 +17,6 @@
 uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc);
 
 //parse html request
-int16_t parse_http_request(char *rq, char **res);
+int16_t parse_http_request(char *rq, char **res, uint16_t tcp_len);
 
 #endif /* HTTP_PARSER_H_ */

@@ -138,25 +138,27 @@ static void connection_task(void *arg){
 		net_err = netconn_recv(conn_ptr, &inbuf);
 		if (net_err == ERR_OK){
 			//read data from input buffer
-			netbuf_data(inbuf, (void**) &rq, &tcp_len);
+			net_err = netbuf_data(inbuf, (void**) &rq, &tcp_len);
 
-			if (conn_desc -> type == CONN_UNKNOWN){
-				if (strstr(rq, WS_UPGRADE) != NULL){
-					conn_desc -> type = CONN_WS;
+			if (net_err == ERR_OK){
+				if (conn_desc -> type == CONN_UNKNOWN){
+					if (strstr(rq, WS_UPGRADE) != NULL){
+						conn_desc -> type = CONN_WS;
+					}
+					else{
+						conn_desc -> type = CONN_HTTP;
+					}
+				}
+
+				if (conn_desc -> type == CONN_HTTP){
+					//http connection
+					http_receive(rq, tcp_len, conn_desc);
 				}
 				else{
-					conn_desc -> type = CONN_HTTP;
+					
+					//websocket connection
+					ws_receive(rq, tcp_len, conn_desc);
 				}
-			}
-
-			if (conn_desc -> type == CONN_HTTP){
-				//http connection
-				http_receive(rq, tcp_len, conn_desc);
-			}
-			else{
-				
-				//websocket connection
-				ws_receive(rq, tcp_len, conn_desc);
 			}
 		}
 		else{
