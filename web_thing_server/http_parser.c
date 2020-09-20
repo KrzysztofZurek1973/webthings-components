@@ -19,6 +19,7 @@ int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t len);
 int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len);
 
 char res_header_ok[] = "HTTP/1.1 200 OK\r\n"\
+						"Access-Control-Allow-Origin: *\r\n"\
 						"Content-Type: application/td+json; charset=utf-8\r\n\r\n";
 char res_header_201[] = "HTTP/1.1 201 Created\r\n"\
 						"Content-Type: application/json; charset=utf-8\r\n\r\n";
