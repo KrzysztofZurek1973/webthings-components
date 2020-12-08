@@ -68,23 +68,15 @@ void get_server_time(char *time_buff, uint32_t buff_len){
 int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 	struct netconn *conn_ptr;
 	err_t err;
-	uint8_t index;
 	char time_buffer[20];
 	
 	xSemaphoreTake(close_conn_mux, portMAX_DELAY);
 	if (conn_desc -> deleted != true){
 		conn_desc -> deleted = true;
-		index = conn_desc -> index;
 		conn_ptr = conn_desc -> netconn_ptr;
 	
 		if (conn_ptr != NULL){
 			get_server_time(time_buffer, sizeof(time_buffer));
-			printf("%s, %s: CLOSE CONNECTION, index = %i, type: %i\n",
-					time_buffer,
-					tag,
-					index,
-					conn_desc -> type);
-
 			//close TCP connection
 			if ((err = netconn_close(conn_ptr)) != ERR_OK){
 				printf("%s \"netconn_close\" ERROR: %i\n", tag, err);
@@ -155,7 +147,6 @@ static void connection_task(void *arg){
 					http_receive(rq, tcp_len, conn_desc);
 				}
 				else{
-					
 					//websocket connection
 					ws_receive(rq, tcp_len, conn_desc);
 				}
@@ -233,7 +224,7 @@ static void server_main_task(void* arg){
 			
 			char time_buffer[20];
 			get_server_time(time_buffer, sizeof(time_buffer));
-			printf("%s, new client connected, index: %i\n", time_buffer, index);
+			//printf("%s, new client connected, index: %i\n", time_buffer, index);
 			
 			if (index > -1){
 				connection_tab[index].type = CONN_UNKNOWN;
@@ -567,6 +558,7 @@ char *get_root_dir(){
 	t = root_node.things;
 	if (root_node.things_quantity == 0){
 		res_buff = malloc(6);
+		memset(res_buff, 0, 6);
 		strcat(res_buff, "[{}]");
 	}
 	else if (root_node.things_quantity == 1){

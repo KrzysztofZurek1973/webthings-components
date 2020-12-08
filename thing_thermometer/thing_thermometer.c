@@ -318,6 +318,8 @@ thing_t *init_thermometer(char *_thing_id){
 	prop_errors -> at_type = &errors_prop_type;
 	prop_errors -> type = VAL_INTEGER;
 	prop_errors -> value = &temp_errors;
+	prop_errors -> max_value.int_val = 1000000;
+	prop_errors -> min_value.int_val = 0;
 	prop_errors -> unit = "";
 	prop_errors -> title = "Errors";
 	prop_errors -> read_only = true;

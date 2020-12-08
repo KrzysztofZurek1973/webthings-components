@@ -21,10 +21,21 @@ int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len);
 char res_header_ok[] = "HTTP/1.1 200 OK\r\n"\
 						"Access-Control-Allow-Origin: *\r\n"\
 						"Content-Type: application/td+json; charset=utf-8\r\n\r\n";
+						
 char res_header_201[] = "HTTP/1.1 201 Created\r\n"\
+						"Access-Control-Allow-Origin: *\r\n"\
 						"Content-Type: application/json; charset=utf-8\r\n\r\n";
+						
+char res_header_204[] = "HTTP/1.1 204 No Content\r\n"\
+						"Access-Control-Allow-Origin: *\r\n"\
+						"Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n"\
+						"Access-Control-Allow-Headers: content-type\r\n"\
+						"Access-Control-Max-Age: 86400\r\n\r\n";
+						
 char res_header_err500[] = "HTTP/1.1 500 Internal Server Error\r\n"\
-						"Content-Type: text/html; charset=utf-8\r\n\r\n";
+							"Access-Control-Allow-Origin: *\r\n"\
+							"Content-Type: text/html; charset=utf-8\r\n\r\n";
+							
 char res_header_err400[] = "HTTP/1.1 400 Bad Request\r\n\r\n";
 
 
@@ -83,6 +94,12 @@ int16_t parse_http_request(char *rq, char **res, uint16_t len){
 		//POST request
 		result = post_parser(rq, &buff, root_node.things_quantity, len);
 	}
+	else if (rq[0] == 'O' && rq[1] == 'P' && rq[2] == 'T' && rq[3] == 'I' && rq[4] == 'O' &&
+			rq[5] == 'N' && rq[6] == 'S'){
+		//OPTIONS request
+		//Cross-Origin Resource Sharing (CORS)
+		result = 204;
+	}
 	else{
 		result = -1;
 	}
@@ -96,6 +113,9 @@ int16_t parse_http_request(char *rq, char **res, uint16_t len){
 	}
 	else if (result == 201){
 		http_header = res_header_201;
+	}
+	else if (result == 204){
+		http_header = res_header_204;
 	}
 	else if (result == -400){
 		http_header = res_header_err400;
