@@ -14,7 +14,7 @@
 #include "common.h"
 
 #define THING_MODEL_LEN 3000
-#define things_context "https://iot.mozilla.org/schemas"
+#define things_context "https://webthings.io/schemas"
 
 typedef struct subscriber_t subscriber_t;
 

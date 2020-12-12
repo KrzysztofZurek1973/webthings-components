@@ -8,7 +8,7 @@ How to use WTS is discussed below using the example of [blinking led](https://gi
 
 ## How to use
 
-For every *thing* the following functions must be defined:
+For every *webThing* the following functions must be defined:
 
 * **set function** for writable properties,  function called when the value changes via gateway web interface (PUT for REST API, `setProperty` for WebSocket API)
 
@@ -22,7 +22,7 @@ see [blinking led](https://github.com/KrzysztofZurek1973/iot_components/blob/mas
 
 see [blinking led](https://github.com/KrzysztofZurek1973/iot_components/blob/master/thing_blinking_led/thing_blinking_led.c): `void blinking_led_fun(void *param)`
 
-and parameters such as id, @context (default is https://iot.mozilla.org/schemas), @type, description and json model length in bytes.
+and parameters such as id, @context (default is https://webthings.io/schemas), @type, description and json model length in bytes.
 For every thing the properties and/or actions and/or events must be defined (at least one of them should be defined).
 
 The use of **Web Thing Server** requires the following steps:
@@ -95,11 +95,12 @@ In the following lines On/Off property is created
 
 `prop_led_on -> mux = led_mux;` //mutex
 
-Other possible property types are:
+Possible property types are:
 
-* `VAL_NUMBER`
-* `VAL_INTEGER`
-* `VAL_STRING`
+* `VAL_BOOLEAN` (`boolean`)
+* `VAL_NUMBER` (`double`)
+* `VAL_INTEGER` (`int32_t`)
+* `VAL_STRING` (`char *`)
 * `VAL_ARRAY`
 * `VAL_OBJECT`
 
@@ -175,7 +176,7 @@ The [button](https://github.com/KrzysztofZurek1973/iot_components/blob/master/th
 
 Set function is called when new property value is sent to server (to thing) from gateway web interface, it receives string representation of the new value.
 
-For example when you tap blinking led circle on web interface (when it's off) set function receives message `”true”`.
+For example when you tap blinking led circle on web interface (when it's off) set function receives message `”true”` (ON/OFF property has type `VAL_BOOLEAN`).
 
 ![set_on](../thing_blinking_led/a2.png)
 

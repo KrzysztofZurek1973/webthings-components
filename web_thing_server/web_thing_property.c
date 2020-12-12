@@ -79,7 +79,7 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 					"[{\"rel\":\"property\",\"href\":\"%sproperties/%s\"}]}";
 
 	char num_str[] = "\"minimum\":%s,\"maximum\":%s,\"unit\":\"%s\",";
-
+	char num_str_unit[] = "\"unit\":\"%s\",";
 	char *type[] = {"null", "boolean", "object", "array",
 					"number", "integer", "string"};
 	char *bool_str[] = {"false", "true"};
@@ -101,15 +101,29 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 	memset(buff_max, 0, 15);
 
 	if (p -> type == VAL_INTEGER){
-		sprintf(buff_min, "%i", (int32_t)(p -> min_value.int_val));
-		sprintf(buff_max, "%i", (int32_t)(p -> max_value.int_val));
-		sprintf(buff1, num_str, buff_min, buff_max, p -> unit);
+		if (p -> min_value.int_val != p -> max_value.int_val){
+			sprintf(buff_min, "%i", (int32_t)(p -> min_value.int_val));
+			sprintf(buff_max, "%i", (int32_t)(p -> max_value.int_val));
+			sprintf(buff1, num_str, buff_min, buff_max, p -> unit);
+		}
+		else{
+			if (p -> unit != NULL){
+				sprintf(buff1, num_str_unit, p -> unit);
+			}
+		}
 		build_json = true;
 	}
 	else if (p -> type == VAL_NUMBER){
-		sprintf(buff_min, "%5.3f", p -> min_value.float_val);
-		sprintf(buff_max, "%5.3f", p -> max_value.float_val);
-		sprintf(buff1, num_str, buff_min, buff_max, p -> unit);
+		if (p -> min_value.float_val != p -> max_value.float_val){
+			sprintf(buff_min, "%5.3f", p -> min_value.float_val);
+			sprintf(buff_max, "%5.3f", p -> max_value.float_val);
+			sprintf(buff1, num_str, buff_min, buff_max, p -> unit);
+		}
+		else{
+			if (p -> unit != NULL){
+				sprintf(buff1, num_str_unit, p -> unit);
+			}
+		}
 		build_json = true;
 	}
 	else if (p -> type == VAL_BOOLEAN){
