@@ -297,6 +297,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			finish = ws_header -> fin;
 			if (finish == 0x0){
 				//fragmentation not supported
+				printf("websocket: fragmentation not supported\n");
 				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
 				conn_desc -> ws_status_code = DATA_INCONSIST;
 				ws_close(conn_desc);
@@ -308,6 +309,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				ws_len = (rq[offset] << 8) + rq[offset + 1];
 				offset = 4;
 				if (ws_len > MAX_PAYLOAD_LEN){
+					printf("websocket: message too long\n");
 					conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
 					conn_desc -> ws_status_code = DATA_TO_BIG;
 					ws_close(conn_desc);
@@ -316,6 +318,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			}
 			else if (ws_len == 127){
 				//64bit addresses are not supported
+				printf("websocket: 64bit addresses are not supported\n");
 				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
 				conn_desc -> ws_status_code = DATA_TO_BIG;
 				ws_close(conn_desc);
@@ -336,21 +339,9 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 		}
 		if (msg != NULL){
 			//copy data to buffer
-			memcpy(msg + msg_start, rq + offset, tcp_len - offset);
-			msg_start += tcp_len - offset;
-			if (msg_start == ws_len){
-				//all data received, unmask data
-				if ((mask == 1) && (ws_len > 0)){
-					//unmask data
-					for (int i = 0; i < ws_len; i++){
-						msg[i] = msg[i] ^ masking_key[i%4];
-					}
-				}
-				msg_ok = 1;
-				msg[ws_len] = 0;
-				msg_start = 0;
-			}
-			else if (msg_start > ws_len){
+			int msg_start_temp = msg_start + tcp_len - offset;
+			
+			if (msg_start_temp > ws_len){
 				//message length error, close connection
 				printf("msg length error, %i, %i\n", msg_start, ws_len);
 				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
@@ -359,6 +350,34 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 				free(msg);
 				return -1;
 			}
+			else{
+				memcpy(msg + msg_start, rq + offset, tcp_len - offset);
+				msg_start += tcp_len - offset;
+				if (msg_start == ws_len){
+					//all data received, unmask data
+					if ((mask == 1) && (ws_len > 0)){
+						//unmask data
+						for (int i = 0; i < ws_len; i++){
+							msg[i] = msg[i] ^ masking_key[i%4];
+						}
+					}
+					msg_ok = 1;
+					msg[ws_len] = 0;
+					msg_start = 0;
+				}
+			}
+			/*
+			else if (msg_start > ws_len){
+				//message length error, close connection
+				printf("ws request:\n%s\n", msg);
+				printf("msg length error, %i, %i\n", msg_start, ws_len);
+				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
+				conn_desc -> ws_status_code = SERVER_ERR;
+				ws_close(conn_desc);
+				free(msg);
+				return -1;
+			}
+			*/
 		}
 		else{
 			if ((ws_len == 0) && (opcode == WS_OP_PIN || opcode == WS_OP_CLS)){
