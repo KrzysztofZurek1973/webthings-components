@@ -17,8 +17,6 @@
 #define GPIO_RESET_BUTTON_MASK		(1ULL << GPIO_RESET_BUTTON)
 
 static xSemaphoreHandle DRAM_ATTR reset_button_sem;
-//static bool DRAM_ATTR nvs_reset_button_ready = false;
-
 
 /* ************************************************************
  *
@@ -114,8 +112,7 @@ void init_reset_button_io(void){
  *
  *
  * *******************************************************/
-void init_reset_button(void){
-
+void init_reset_button(void){	
 	reset_button_sem = xSemaphoreCreateBinary();
 	init_reset_button_io();
 

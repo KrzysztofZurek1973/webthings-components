@@ -320,10 +320,11 @@ int request_action(int8_t thing_nr, char *action_id, char *inputs){
 * set resource value
 *
 * ************************************************************************/
-int8_t set_resource_value(int8_t thing_nr, char *name, char *new_value_str){
+int16_t set_resource_value(int8_t thing_nr, char *name, char *new_value_str){
 	thing_t *t = NULL;
 	property_t *p = NULL;
-	int8_t set_result = -1;
+	int16_t set_result = 0;
+	int16_t result = 500;
 
 	//find thing
 	t = get_thing_ptr(thing_nr);
@@ -345,10 +346,17 @@ int8_t set_resource_value(int8_t thing_nr, char *name, char *new_value_str){
 
 		if (set_result == 1){
 			inform_all_subscribers_prop(p);
+			result = 200;
 		}
+		else if (set_result == -1){
+			result = 400;
+		}
+		else if (set_result == 0){
+			result = 204;
+		}	
 	}
 
-	return set_result;
+	return result;
 }
 
 

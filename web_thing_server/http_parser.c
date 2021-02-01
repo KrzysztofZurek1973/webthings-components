@@ -101,14 +101,14 @@ int16_t parse_http_request(char *rq, char **res, uint16_t len){
 		result = 204;
 	}
 	else{
-		result = -1;
+		result = 500;
 	}
 
 	if (buff != NULL){
 		res_len = strlen(buff);
 	}
 	
-	if (result == 0){
+	if (result == 200){
 		http_header = res_header_ok;
 	}
 	else if (result == 201){
@@ -117,7 +117,7 @@ int16_t parse_http_request(char *rq, char **res, uint16_t len){
 	else if (result == 204){
 		http_header = res_header_204;
 	}
-	else if (result == -400){
+	else if (result == 400){
 		http_header = res_header_err400;
 	}
 	else{
@@ -293,7 +293,7 @@ int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len){
 	}
 
 	if (res_buff == NULL){
-		result = -400;
+		result = 400;
 	}
 	free(org_url);
 	*res = res_buff;
@@ -309,12 +309,12 @@ int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len){
  *  	things	- things quantity in the node
  *		len		- TCP length
  * output:
- *  	0		- OK
- *     -400		- client error
- *     -500		- server error
+ *  	200		- OK
+ *      400		- client error
+ *      500		- server error
  ***********************************************************************/
 int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
-	int16_t result = 0;
+	int16_t result = 500;
 	char *ptr_1 = NULL, *ptr_2 = NULL;
 	int16_t url_level_len;
 	char *res_buff = NULL;
@@ -462,12 +462,12 @@ int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
 
 					if (resource == PROPERTY){
 						//call set function for this property
-						int8_t res = set_resource_value(thing_nr, url_level_body, new_value);
-						if (res < 0){
-							printf("http_parser ERROR: resource value not set!\n");
-						}
-						else{
+						result = set_resource_value(thing_nr, url_level_body, new_value);
+						if (result == 200){
 							res_buff = get_resource_value(thing_nr, PROPERTY, url_level_body, -1);
+						}
+						else if (result == 400){
+							printf("http_parser ERROR: resource value not set!\n");
 						}
 					}
 
@@ -478,13 +478,10 @@ int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
 			default:
 				printf("http parser, ERROR: URL too long\n");
 				url_end = true;
+				result = 400;
 			}
 			url = ptr_3;
 		}
-	}
-
-	if (res_buff == NULL){
-		result = -400;
 	}
 	free(org_url);
 	*res = res_buff;
@@ -505,7 +502,7 @@ int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
  *     -1 - error
  ***********************************************************************/
 int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len){
-	int16_t result = 0;
+	int16_t result = 200;
 	char *ptr_1 = NULL, *url_end_ptr = NULL;
 	int16_t url_level_len;
 	char *res_buff = NULL;
@@ -661,7 +658,7 @@ int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len){
 	if (res_buff == NULL){
 		//TODO: correct error description
 		//res_buff = get_error(org_url);
-		result = -400;
+		result = 400;
 	}
 	free(org_url);
 	*res = res_buff;

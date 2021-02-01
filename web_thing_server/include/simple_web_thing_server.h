@@ -43,7 +43,7 @@ char *get_root_dir(void);
 int8_t add_thing_to_server(thing_t *t);
 
 char *get_resource_value(int8_t thing_id, RESOURCE_TYPE resource, char *name, int index);
-int8_t set_resource_value(int8_t thing_id, char *name, char *new_value_str);
+int16_t set_resource_value(int8_t thing_id, char *name, char *new_value_str);
 thing_t *get_thing_ptr(uint8_t thing_nr);
 int8_t inform_all_subscribers_prop(property_t *_p);
 int8_t inform_all_subscribers_action(action_t *_a, char *data, int len);
