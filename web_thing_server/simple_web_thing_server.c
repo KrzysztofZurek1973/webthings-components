@@ -348,11 +348,11 @@ int16_t set_resource_value(int8_t thing_nr, char *name, char *new_value_str){
 			inform_all_subscribers_prop(p);
 			result = 200;
 		}
+		else if (set_result == 0){
+			result = 200;
+		}
 		else if (set_result == -1){
 			result = 400;
-		}
-		else if (set_result == 0){
-			result = 204;
 		}	
 	}
 
