@@ -1,4 +1,4 @@
-# IoT components
+# Webthings components
 
 This repository includes **Web Thing Server** for ESP32 and things dedicated for this server.
 
