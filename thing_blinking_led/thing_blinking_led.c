@@ -103,7 +103,7 @@ void init_led_io(void){
 * set ON/OFF state
 *
 *******************************************************************/
-int8_t led_set_on_off(char *new_value_str){
+int16_t led_set_on_off(char *new_value_str){
 	int8_t res = 1;
 	
 	xSemaphoreTake(led_mux, portMAX_DELAY);
@@ -131,7 +131,7 @@ int8_t led_set_on_off(char *new_value_str){
 * int values frequency x 10
 *
 *******************************************************************/
-int8_t led_set_frequency(char *new_value_str){
+int16_t led_set_frequency(char *new_value_str){
 	int8_t res = 0;
 	int prev_freq, new_freq, fmin, fmax;
 	
