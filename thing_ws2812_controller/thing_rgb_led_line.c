@@ -36,12 +36,12 @@ char *color_model_jsonize(property_t *p);
 char *color_value_jsonize(property_t *p);
 
 //set functions
-int8_t diodes_set(char *new_value_str); //set number of diodes
-int8_t pattern_set(char *new_value_str); //set number of pattern
-int8_t speed_set(char *new_value_str); //set speed value
-int8_t color_set(char *new_value_str); //set color for some patterns
-int8_t brightness_set(char *new_value_str); //set brightness
-int8_t on_off_set(char *new_value_str); //switch ON/OFF
+int16_t diodes_set(char *new_value_str); //set number of diodes
+int16_t pattern_set(char *new_value_str); //set number of pattern
+int16_t speed_set(char *new_value_str); //set speed value
+int16_t color_set(char *new_value_str); //set color for some patterns
+int16_t brightness_set(char *new_value_str); //set brightness
+int16_t on_off_set(char *new_value_str); //switch ON/OFF
 
 //thing description
 char patterns_name_tab[8][20] = {"Standby", "Running point", "Rgb palette",
@@ -117,7 +117,7 @@ static void spiInit(void);
  * switch led line ON or OFF
  *
  * *****************************************************************/
-int8_t on_off_set(char *new_value_str){
+int16_t on_off_set(char *new_value_str){
 	int8_t res = 1;
 
 	if (strcmp(new_value_str, "true") == 0){
@@ -142,7 +142,7 @@ int8_t on_off_set(char *new_value_str){
  * normally it will be used only by configuration of the device
  *
  * ***************************************************************/
-int8_t diodes_set(char *new_value_str){
+int16_t diodes_set(char *new_value_str){
 	int8_t res = 1;
 	nvs_handle storage_handle = 0;
 
@@ -194,7 +194,7 @@ char *convert_color_into_web_str(rgb_t *c){
  * set number of pattern
  *
  * ****************************************************************/
-int8_t pattern_set(char *new_value_str){
+int16_t pattern_set(char *new_value_str){
 	int8_t res = -1;
 	uint16_t p = 0;
 	char *c1, *buff = NULL;//, *prev_patt;
@@ -279,7 +279,7 @@ int8_t pattern_set(char *new_value_str){
  * "0" is special value, means "static color", refreshing is stopped
  *
  * *****************************************************************/
-int8_t speed_set(char *new_value_str){
+int16_t speed_set(char *new_value_str){
 	int8_t res = 1;
 	int16_t s;
 	pattParam_t *patt_param;
@@ -318,7 +318,7 @@ int8_t speed_set(char *new_value_str){
  * set color for some patterns
  *
  * ******************************************************************/
-int8_t color_set(char *buff){
+int16_t color_set(char *buff){
 	int8_t res = 1;
 	uint8_t red8, green8, blue8;
 	char c[3];
@@ -377,7 +377,7 @@ int8_t color_set(char *buff){
  * set brightness
  *
  * ****************************************************************/
-int8_t brightness_set(char *new_value_str){
+int16_t brightness_set(char *new_value_str){
 	int32_t res = 1, brgh;
 	pattParam_t *pattParam;
 	char buff[16];
