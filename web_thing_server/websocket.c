@@ -1,8 +1,11 @@
 /*
  * websocket.c
  *
+ *  This file is a part of the "Simple Web Thing Server" project
  *  Created on: Jul 1, 2019
- *      Author: kz
+ *  Last edit:	Feb 19, 2021
+ *      Author: Krzysztof Zurek
+ *		e-mail: krzzurek@gmail.com
  */
 #include <stdio.h>
 #include <sys/param.h>
@@ -280,13 +283,13 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	opcode = 0;
 	msg_ok = 0;
 
-	if (conn_desc -> conn_state == WS_CLOSING){
+	if (conn_desc -> ws_state == WS_CLOSING){
 		//ignore received messages in CLOSING state
 		goto ws_receive_end;
 	}
 
 	//read data from input buffer
-	if (conn_desc -> conn_state != WS_CLOSED){
+	if (conn_desc -> ws_state != WS_CLOSED){
 		//receive websocket data from client
 		offset = 0;
 		if (msg_start == 0){
@@ -294,6 +297,12 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			ws_header = (ws_frame_header_t *)rq;
 			ws_len = ws_header -> payload_len;
 			opcode = ws_header -> opcode;
+			
+			//TEST
+			//printf("ws opcode: %i, ID: %i, ping: %i\n", 
+			//		opcode, conn_desc -> index, conn_desc -> ws_pongs); //test
+			//TEST
+			
 			finish = ws_header -> fin;
 			if (finish == 0x0){
 				//fragmentation not supported
@@ -341,16 +350,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			//copy data to buffer
 			int msg_start_temp = msg_start + tcp_len - offset;
 			
-			if (msg_start_temp > ws_len){
-				//message length error, close connection
-				printf("msg length error, %i, %i\n", msg_start, ws_len);
-				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
-				conn_desc -> ws_status_code = SERVER_ERR;
-				ws_close(conn_desc);
-				free(msg);
-				return -1;
-			}
-			else{
+			if (msg_start_temp <= ws_len){
 				memcpy(msg + msg_start, rq + offset, tcp_len - offset);
 				msg_start += tcp_len - offset;
 				if (msg_start == ws_len){
@@ -366,18 +366,15 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 					msg_start = 0;
 				}
 			}
-			/*
-			else if (msg_start > ws_len){
+			else {
 				//message length error, close connection
-				printf("ws request:\n%s\n", msg);
-				printf("msg length error, %i, %i\n", msg_start, ws_len);
+				printf("msg length error, %i, %i\nmsg:\n%s\n", msg_start, ws_len, msg);
 				conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
 				conn_desc -> ws_status_code = SERVER_ERR;
 				ws_close(conn_desc);
 				free(msg);
 				return -1;
 			}
-			*/
 		}
 		else{
 			if ((ws_len == 0) && (opcode == WS_OP_PIN || opcode == WS_OP_CLS)){
@@ -388,7 +385,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	}
 
 	//collect message, check it
-	switch (conn_desc -> conn_state){
+	switch (conn_desc -> ws_state){
 	case WS_OPEN:
 		if (msg_ok == 1){
 			switch(opcode){
@@ -484,7 +481,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 						add_subscriber(conn_desc);
 					}
 					else{
-						conn_desc -> run = CONN_STOP;
+						conn_desc -> connection = CONN_WS_CLOSE;
 						printf("Thing number ERROR in handshake URL\n");
 					}
 				}
@@ -497,9 +494,9 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 			}
 		}
 		else{
-			//wrong, open request, close connection
-			conn_desc -> run = CONN_STOP;
-			printf("ERROR: bad http request at handshake\n");
+			//not correct handshake request, close connection
+			conn_desc -> connection = CONN_WS_CLOSE;
+			printf("ERROR: bad http request at handshake\n%s\n", rq);
 		}
 		break;
 	case WS_OPENING:
@@ -509,7 +506,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	case WS_CLOSING:
 		if (opcode == WS_OP_CLS){
 			printf("client answer on close frame, close code = %i", (msg[0] << 8) + msg[1]);
-			conn_desc -> run = CONN_STOP;
+			conn_desc -> connection = CONN_WS_CLOSE;
 			//TODO: if this is not answer for server's CLOSE, but client's first
 			//CLOSE frame, then client is waiting for server's CLOSE
 		}
@@ -519,7 +516,7 @@ int8_t ws_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 		//ignore other opcodes
 		break;
 	default:
-		conn_desc -> run = CONN_STOP;
+		conn_desc -> connection = CONN_WS_CLOSE;
 	}//switch(ws_state)
 
 ws_receive_end:	
@@ -609,7 +606,7 @@ int8_t ws_handshake(char *rq, connection_desc_t *conn_desc, ws_queue_item_t *ws_
 	//send answer to the client
 	if ((msg_flags == 0x0F) && (server_ans != NULL)){
 
-		conn_desc -> conn_state = WS_OPENING;
+		conn_desc -> ws_state = WS_OPENING;
 
 		ws_item -> payload = (uint8_t *)server_ans;
 		ws_item -> len = strlen(server_ans);
@@ -630,14 +627,10 @@ int8_t ws_handshake(char *rq, connection_desc_t *conn_desc, ws_queue_item_t *ws_
 
 //create and start time-out timer for ending connection 
 int8_t create_connection_timeout(connection_desc_t *conn_desc){
-	int *index;
 	TimerHandle_t timeout_timer;
 	int32_t timeout;
 	
-	if (conn_desc -> timer_handl == NULL){
-	
-		index = malloc(sizeof(int));
-		*index = (int)(conn_desc -> index);
+	if (conn_desc -> timer == NULL){
 
 		if (conn_desc -> ws_close_initiator == WS_CLOSE_BY_CLIENT){
 			//close initiated by client, only 1 CLS frame must be sent
@@ -653,18 +646,20 @@ int8_t create_connection_timeout(connection_desc_t *conn_desc){
 			return -1;
 		}
 	
-		timeout_timer = xTimerCreate("timeout", pdMS_TO_TICKS(timeout),
-						pdFALSE, (void *)index,
-						vCloseTimeoutCallback);
+		timeout_timer = xTimerCreate("timeout", 
+									pdMS_TO_TICKS(timeout),
+									pdFALSE, 
+									(void *)&(conn_desc -> index),
+									vCloseTimeoutCallback);
 	
 		//start timer
 		BaseType_t res = xTimerStart(timeout_timer, 5);
 		if (res == pdPASS) {
-			conn_desc -> timer_handl = timeout_timer;
+			conn_desc -> timer = timeout_timer;
 			return 1;
 		}
 		else {
-			conn_desc -> timer_handl = NULL;
+			conn_desc -> timer = NULL;
 			xTimerDelete(timeout_timer, 10);
 			return -1;
 		}
@@ -682,12 +677,12 @@ int8_t ws_close(connection_desc_t *conn_desc){
 	int16_t len;
 	uint16_t cls_status;
 
-	if (conn_desc -> conn_state == WS_CLOSING){
+	if (conn_desc -> ws_state == WS_CLOSING){
 		return -1;
 	}
 	
 	cls_status = conn_desc -> ws_status_code;
-	conn_desc -> conn_state = WS_CLOSING;
+	conn_desc -> ws_state = WS_CLOSING;
 
 	//prepare close frame with close code
 	if (cls_status == 0){
@@ -718,26 +713,31 @@ int8_t ws_close(connection_desc_t *conn_desc){
 }
 
 
-// ****************************************************************************
-//closing timer callback
+/*************************************************
+*
+* timer callback for closing websocket
+*
+**************************************************/
+
 void vCloseTimeoutCallback( TimerHandle_t xTimer ){
 	uint8_t index;
-	connection_desc_t *conn_desc;
+	connection_desc_t *conn_desc = NULL;
 
-	index = *(uint8_t *) pvTimerGetTimerID(xTimer);
-	free(pvTimerGetTimerID(xTimer));
+	index = *(uint8_t *)pvTimerGetTimerID(xTimer);
 
 	conn_desc = &connection_tab[index];
 	
-	//clear connection resources
-	while (conn_desc -> msg_to_send > 0){
-		//wait until all messages are sent
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
-	}
+	if (conn_desc != NULL){
+		//clear connection resources
+		if (conn_desc -> msg_to_send > 0){
+			//wait until all messages are sent
+			xTimerReset(xTimer, 5);
+			printf("ws reset timer\n"); //TEST
+			return;
+		}
 	
-	close_thing_connection(conn_desc, "TIME OUT");
-		
-	xTimerDelete(xTimer, 10);
+		close_thing_connection(conn_desc, "WS TIME OUT");
+	}
 }
 
 
@@ -771,7 +771,7 @@ static void ws_send_task(void* arg){
 		}
 		
 		//send data to the client
-		state = conn_desc -> conn_state;
+		state = conn_desc -> ws_state;
 		if ((state == WS_OPEN) || (state == WS_OPENING) || (state == WS_CLOSING)){
 			//decrement nr of messages to send for this connection
 			xSemaphoreTake(conn_desc -> mutex, portMAX_DELAY);
@@ -796,7 +796,7 @@ static void ws_send_task(void* arg){
 				if (state != WS_CLOSING){
 					if (conn_desc -> send_errors >= WS_MAX_ERRORS){
 						printf("WS SEND: too much errors\n");
-						conn_desc -> conn_state = WS_CLOSING;
+						conn_desc -> ws_state = WS_CLOSING;
 						conn_desc -> ws_status_code = ABNORMAL_CLS;
 						conn_desc -> ws_close_initiator = WS_CLOSE_BY_SERVER;
 						create_connection_timeout(conn_desc);
@@ -815,8 +815,8 @@ static void ws_send_task(void* arg){
 					conn_desc -> send_errors = 0;
 				}
 				
-				if (conn_desc -> conn_state == WS_OPENING){
-					conn_desc -> conn_state = WS_OPEN;
+				if (conn_desc -> ws_state == WS_OPENING){
+					conn_desc -> ws_state = WS_OPEN;
 				}
 
 				int8_t opcode = q_item -> opcode;
@@ -923,7 +923,7 @@ int8_t ws_server_init(uint16_t port){
 // ***********************************************************
 int8_t ws_send(ws_queue_item_t *item, int32_t wait_ms){
 	
-	if (item -> conn_desc -> conn_state != WS_OPEN){
+	if (item -> conn_desc -> ws_state != WS_OPEN){
 		return -1;
 	}
 	

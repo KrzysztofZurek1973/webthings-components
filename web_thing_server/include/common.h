@@ -23,6 +23,16 @@
 #define MAX_ACTION_REQUESTS 5
 
 typedef enum {
+	CONN_STATE_UNKNOWN = 0,
+	CONN_HTTP_CLOSE = 1,
+	CONN_HTTP_KEEP_ALIVE = 2,
+	CONN_HTTP_RUNNING = 3,
+	CONN_HTTP_STOPPED = 4,
+	CONN_WS_RUNNING = 5,
+	CONN_WS_CLOSE = 6
+}CONN_STATE;
+
+typedef enum {
 	VAL_NULL,
 	VAL_BOOLEAN,
 	VAL_OBJECT,
@@ -59,7 +69,7 @@ typedef enum{
 	CONN_UNKNOWN = 0,
 	CONN_HTTP = 1,
 	CONN_WS = 2
-} conn_type; //connection type
+} CONN_TYPE; //connection type
 
 typedef struct thing_t thing_t;
 typedef struct property_t property_t;
@@ -71,24 +81,24 @@ struct at_type_t{
 };
 
 typedef struct{
-	conn_type	type;
-	struct netconn *netconn_ptr;
-	xTaskHandle task_handl;
-	TimerHandle_t timer_handl;
-	uint32_t	ws_pings;
-	uint32_t	ws_pongs;
-	uint8_t		ws_close_initiator;
-	uint16_t	ws_status_code;
-	uint32_t	packets;
-	uint32_t	bytes;
-	uint32_t	send_errors;
-	int8_t		msg_to_send;
-	uint8_t		index;
-	thing_t		*thing;
-	CONN_RUNING run;
-	uint8_t		conn_state;
-	bool		deleted;
-	xSemaphoreHandle mutex;
+	int8_t				index;
+	CONN_TYPE			type;
+	struct netconn 		*netconn_ptr;
+	xTaskHandle 		task_handl;
+	TimerHandle_t 		timer;
+	uint32_t			ws_pings;
+	uint32_t			ws_pongs;
+	uint8_t				ws_close_initiator;
+	uint16_t			ws_status_code;
+	uint8_t				ws_state;
+	uint32_t			packets;
+	uint32_t			bytes;
+	uint32_t			send_errors;
+	int8_t				msg_to_send;
+	thing_t				*thing;
+	CONN_STATE			connection;
+	uint32_t			requests;
+	xSemaphoreHandle	mutex;
 } connection_desc_t;
 
 #endif /* COMMON_H_ */

@@ -2,12 +2,15 @@
  * simple_web_thing_server.c
  *
  *  Created on: July 1, 2019
+ *  Last edit:	Feb 19, 2021
  *      Author: Krzysztof Zurek
+ *		e-mail: krzzurek@gmail.com
+ *
  *      Notes: some code is inspired by
  *      http://www.barth-dev.de/websockets-on-the-esp32/#
  *
  *      Web Thing Server implementation for ESP32 chips and ESP-IDF
- *      Compliant with Mozilla-IoT API (almost in 100%)
+ *      Compliant with WebThings API (almost in 100%)
  */
 
 #include <stdio.h>
@@ -32,6 +35,7 @@
 #include "common.h"
 
 #define WS_UPGRADE "Upgrade: websocket"
+#define KEEP_ALIVE_TIMEOUT 2000
 
 //global server variables
 static xTaskHandle server_task_handle;
@@ -40,10 +44,10 @@ root_node_t root_node; //http parser uses it
 connection_desc_t connection_tab[MAX_OPEN_CONN];
 static xSemaphoreHandle connection_mux = NULL;
 static xSemaphoreHandle server_mux = NULL;
-static xSemaphoreHandle close_conn_mux = NULL;
 
 //functions
 int8_t send_websocket_msg(thing_t *t, char *buff, int len);
+void http_timer_fun(TimerHandle_t xTimer);
 
 /*****************************************************
 *
@@ -70,10 +74,25 @@ int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 	err_t err;
 	char time_buffer[20];
 	
-	xSemaphoreTake(close_conn_mux, portMAX_DELAY);
-	if (conn_desc -> deleted != true){
-		conn_desc -> deleted = true;
+	//printf("%s, CONN delete ID: %i\n", tag, conn_desc -> index);
+	
+	if (conn_desc -> netconn_ptr != NULL){
+		xSemaphoreTake(server_mux, portMAX_DELAY);
+		
+		//delete subscriber
+		if (conn_desc -> type == CONN_WS){
+			delete_subscriber(conn_desc);
+		}
+		//delete timer
+		if (conn_desc -> timer != NULL){
+			xTimerDelete(conn_desc -> timer, 0);
+			conn_desc -> timer = NULL;
+			//printf("timer deleted\n");
+		}
 		conn_ptr = conn_desc -> netconn_ptr;
+		conn_desc -> netconn_ptr = NULL;
+		
+		xSemaphoreGive(server_mux);
 	
 		if (conn_ptr != NULL){
 			get_server_time(time_buffer, sizeof(time_buffer));
@@ -85,22 +104,8 @@ int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
 			if ((err = netconn_delete(conn_ptr)) != ERR_OK){
 				printf("%s \"netconn_delete\" ERROR: %i\n", tag, err);
 			}
-			//delete subscriber
-			if (conn_desc -> type == CONN_WS){
-				delete_subscriber(conn_desc);
-			}
 		}
-		//clear record in connection table
-		xSemaphoreTake(server_mux, portMAX_DELAY);
-		//memset(conn_desc, 0, sizeof(connection_desc_t));
-		conn_desc -> netconn_ptr = NULL;
-		conn_desc -> timer_handl = NULL;
-		xSemaphoreGive(server_mux);
 	}
-	else{
-		printf("connection already deleted\n");
-	}
-	xSemaphoreGive(close_conn_mux);
 	
 	return 1;
 }
@@ -112,52 +117,113 @@ int8_t close_thing_connection(connection_desc_t *conn_desc, char *tag){
  *
  * ************************************************************************/
 static void connection_task(void *arg){
-	int8_t index;
 	err_t net_err = ERR_OK;
 	struct netconn *conn_ptr;
 	struct netbuf *inbuf;
 	uint16_t tcp_len = 0;
 	char *rq = NULL;
 	connection_desc_t *conn_desc;
+	bool run = true;
 
 	conn_desc = (connection_desc_t *)arg;
-	index = conn_desc -> index;
 
-	//printf("receive task starting, index: %i\n", index);
+	//printf("start connection, ID: %i\n", conn_desc -> index);
 	conn_ptr = conn_desc -> netconn_ptr;
 
-	while(1){
+	while(run){
 		net_err = netconn_recv(conn_ptr, &inbuf);
 		if (net_err == ERR_OK){
+			conn_desc -> requests++;
 			//read data from input buffer
 			net_err = netbuf_data(inbuf, (void**) &rq, &tcp_len);
 
 			if (net_err == ERR_OK){
+				//printf("tcp_len: %i\n", tcp_len); //TEST
+				
 				if (conn_desc -> type == CONN_UNKNOWN){
+					//check connection type: HTTP or websocket
 					if (strstr(rq, WS_UPGRADE) != NULL){
+						//conection is websocket
 						conn_desc -> type = CONN_WS;
+						conn_desc -> connection = CONN_WS_RUNNING;
 					}
 					else{
+						//connection is HTTP
 						conn_desc -> type = CONN_HTTP;
+						if (conn_desc -> connection == CONN_STATE_UNKNOWN){
+							//check HTTP request type (keep-alive or close)
+							char buff[15], *q;
+							
+							q = strstr(rq, "Connection:");
+							if (q != NULL){
+								q += 11;
+								while(*++q == ' ');
+								char *q1 = strstr(q, "\r\n");
+								int len = q1 - q;
+								if (len > 14){
+									len = 14;
+								}
+								memcpy(buff, q, len);
+								buff[len] = 0;
+								if (strstr(buff, "keep-alive") != NULL){
+									conn_desc -> connection = CONN_HTTP_KEEP_ALIVE;
+								}
+								else{
+									conn_desc -> connection = CONN_HTTP_CLOSE;
+								}
+							}							
+						}
 					}
 				}
 
 				if (conn_desc -> type == CONN_HTTP){
-					//http connection
+					//parse http connection
 					http_receive(rq, tcp_len, conn_desc);
 				}
 				else{
-					//websocket connection
+					//parse websocket connection
 					ws_receive(rq, tcp_len, conn_desc);
 				}
+					
+				
+				if (conn_desc -> connection == CONN_HTTP_KEEP_ALIVE){
+					conn_desc -> connection = CONN_HTTP_RUNNING;
+					//start timer
+					conn_desc -> timer = xTimerCreate("http_timer",
+								pdMS_TO_TICKS(KEEP_ALIVE_TIMEOUT),
+								pdFALSE,
+								(void *)&conn_desc -> index,
+								http_timer_fun);
+					if (conn_desc -> timer != NULL){
+						BaseType_t res = xTimerStart(conn_desc -> timer, 5);
+						if (res != pdPASS) {
+							printf("HTTP timer start failed\n");
+							run = false;
+							xTimerDelete(conn_desc -> timer, 10);
+						}
+					}
+				}
+				else if (conn_desc -> connection == CONN_HTTP_CLOSE){
+					run = false;
+				}
+				else if (conn_desc -> connection == CONN_WS_CLOSE){
+					run = false;
+				}
+			}
+			else{
+				printf("netbuff data ERROR\n");
 			}
 		}
 		else{
 			//connection is closed
-			conn_desc -> run = CONN_STOP;
-			char time_buffer[20];
+			run = false;
+			/*
+			printf("conn will be deleted, ID: %i\n", conn_desc -> index);
+
+			char time_buffer[20];	
+				
 			get_server_time(time_buffer, sizeof(time_buffer));
-			
+				
 			if (net_err == ERR_CLSD){
 				printf("%s, TCP was closed by client\n", time_buffer);
 			}
@@ -165,21 +231,38 @@ static void connection_task(void *arg){
 				printf("%s, \"netconn_recv\" index: %i, ERROR = %i\n",
 						time_buffer, index, net_err);
 			}
-
+			*/
 		}
 		//free receive buffer
 		if (inbuf != NULL){
 			netbuf_free(inbuf);
-		}
-		netbuf_delete(inbuf);
-		if (conn_desc -> run == CONN_STOP){
-			break;
+			netbuf_delete(inbuf);
 		}
 	}//while
 
-	close_thing_connection(conn_desc, "CONN_TASK");
+	if (conn_desc -> netconn_ptr != NULL){
+		close_thing_connection(conn_desc, "CONN_TASK");
+	}
 
 	vTaskDelete(NULL);
+}
+
+
+/*****************************************
+ *
+ * HTTP timer function
+ *
+ ******************************************/
+void http_timer_fun(TimerHandle_t xTimer){
+	uint32_t id;
+	connection_desc_t *conn_desc;
+	
+	id = *(uint32_t *)pvTimerGetTimerID(xTimer); 
+	
+	conn_desc = &connection_tab[id];
+	if (conn_desc -> netconn_ptr != NULL){
+		close_thing_connection(conn_desc, "TIMER_TASK");
+	}
 }
 
 
@@ -192,7 +275,7 @@ static void server_main_task(void* arg){
 	server_cfg_t *cfg;
 	uint16_t port;
 	struct netconn *newconn;
-	int8_t index;
+	int8_t index = -1;
 
 	cfg = (server_cfg_t *)arg;
 	port = cfg -> port;
@@ -200,7 +283,6 @@ static void server_main_task(void* arg){
 	//cennection mutex
 	connection_mux = xSemaphoreCreateMutex();
 	server_mux = xSemaphoreCreateMutex();
-	close_conn_mux = xSemaphoreCreateMutex();
 
 	//set up new TCP listener
 	server_conn = netconn_new(NETCONN_TCP);
@@ -214,37 +296,37 @@ static void server_main_task(void* arg){
 			//check if there is a place for next client
 			index = -1;
 			xSemaphoreTake(server_mux, portMAX_DELAY);
+			
 			for (int i = 0; i < MAX_OPEN_CONN; i++){
 				if (connection_tab[i].netconn_ptr == NULL){
 					index = i;
 					break;
 				}
 			}
-			xSemaphoreGive(server_mux);
-			
-			char time_buffer[20];
-			get_server_time(time_buffer, sizeof(time_buffer));
-			//printf("%s, new client connected, index: %i\n", time_buffer, index);
 			
 			if (index > -1){
 				connection_tab[index].type = CONN_UNKNOWN;
 				connection_tab[index].netconn_ptr = newconn;
 				connection_tab[index].task_handl = NULL;
-				connection_tab[index].conn_state = WS_CLOSED;
-				connection_tab[index].timer_handl = NULL;
+				connection_tab[index].ws_state = WS_CLOSED;
+				connection_tab[index].timer = NULL;
 				connection_tab[index].index = index;
 				connection_tab[index].ws_pings = 0;
 				connection_tab[index].ws_pongs = 0;
-				connection_tab[index].run = CONN_RUN;
+				connection_tab[index].connection = CONN_STATE_UNKNOWN;
 				connection_tab[index].thing = NULL;
 				connection_tab[index].bytes = 0;
-				connection_tab[index].deleted = false;
+				connection_tab[index].requests = 0;
 				connection_tab[index].mutex = connection_mux;
 				
+				xSemaphoreGive(server_mux);
+				
 				BaseType_t xret;
-				xret = xTaskCreate(connection_task, "conn_task", 1024*6,
-							&connection_tab[index], 1,
-							&connection_tab[index].task_handl);
+				xret = xTaskCreate(connection_task, "conn_task",
+									1024*6,
+									&connection_tab[index],
+									1,
+									&connection_tab[index].task_handl);
 				if (xret != pdPASS){
 					printf("new connection failed\n");
 					connection_tab[index].netconn_ptr = NULL;
@@ -253,11 +335,18 @@ static void server_main_task(void* arg){
 				}
 			}
 			else{
+				xSemaphoreGive(server_mux);
 				//too much clients, send error info and close connection
 				printf("no space for new clients\n");
 				netconn_close(newconn);
 				netconn_delete(newconn);
 			}
+			
+			//TEST
+			//char time_buffer[20];
+			//get_server_time(time_buffer, sizeof(time_buffer));
+			//printf("%s, new client connected, index: %i\n", time_buffer, index);
+			//END OF TEST
 		}
 	}
 }
@@ -402,7 +491,6 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 						buff = new_buff;
 					}
 					curr_len += temp_len;
-					//strcpy(buff + strlen(buff), buff1);
 					strcat(buff, buff1);
 					free(buff1);
 					if (i < (n - 1)){
@@ -450,7 +538,6 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 				//list all action requests for this thing
 				action_t *a = t -> actions;
 				if (a != NULL){
-					//take mux
 					//count all requests in queues
 					int ar_cnt = 0;
 					action_t *a1 = t -> actions;
@@ -467,7 +554,7 @@ char *get_resource_value(int8_t thing_nr, RESOURCE_TYPE resource, char *name, in
 					buff = malloc(300 * ar_cnt + 3);
 					memset(buff, 0, 300 * ar_cnt + 3);
 					strcat(buff, "[");
-					//release mux
+
 					int m;
 					if (ar_cnt < 5){
 						m = ar_cnt;
@@ -558,7 +645,6 @@ int8_t add_thing_to_server(thing_t *t){
 //**********************************************************************
 //get the root directory
 char *get_root_dir(){
-	//char *buff_1 = NULL;
 	char *res_buff = NULL;
 	thing_t *t = NULL;
 
@@ -572,7 +658,6 @@ char *get_root_dir(){
 	else if (root_node.things_quantity == 1){
 		//single thing node
 		res_buff = malloc(t -> model_len + 5);
-		//strcat(res_buff, "[{");
 		res_buff[0] = '[';
 		res_buff[1] = '{';
 		res_buff[2] = 0;
@@ -601,8 +686,7 @@ char *get_root_dir(){
 			if (t != NULL){
 				int t_len = thing_jsonize(t, root_node.host_name, root_node.domain,
 										root_node.port, buff_start);
-				//strcat(res_buff, buff_1);
-				//free(buff_1);
+
 				if (i != things - 1){
 					strcat(res_buff, "},{");
 					buff_start += 3;
@@ -754,8 +838,6 @@ int8_t inform_all_subscribers_event(event_t *_e, char *data, int len){
 		//prepare message
 		buff = malloc(len + strlen(msg) + 1);
 		sprintf(buff, msg, data);
-		//printf("event msg: %s\n", buff);
-		
 		queue_data = malloc(sizeof(ws_queue_item_t));
 		queue_data -> payload = (uint8_t *)buff;
 		queue_data -> len = strlen(buff);

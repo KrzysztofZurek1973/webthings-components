@@ -2,7 +2,9 @@
  * html_parser.c
  *  This file is a part of the "Simple Web Thing Server" project
  *  Created on: June 18, 2019
+ *  Last edit:	Feb 19, 2021
  *      Author: Krzysztof Zurek
+ *		e-mail: krzzurek@gmail.com
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,25 +20,38 @@ int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len);
 int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t len);
 int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len);
 
-char res_header_ok[] = "HTTP/1.1 200 OK\r\n"\
-						"Access-Control-Allow-Origin: *\r\n"\
-						"Content-Type: application/td+json; charset=utf-8\r\n\r\n";
-						
-char res_header_201[] = "HTTP/1.1 201 Created\r\n"\
-						"Access-Control-Allow-Origin: *\r\n"\
-						"Content-Type: application/json; charset=utf-8\r\n\r\n";
-						
-char res_header_204[] = "HTTP/1.1 204 No Content\r\n"\
-						"Access-Control-Allow-Origin: *\r\n"\
-						"Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n"\
-						"Access-Control-Allow-Headers: content-type\r\n"\
-						"Access-Control-Max-Age: 86400\r\n\r\n";
-						
-char res_header_err500[] = "HTTP/1.1 500 Internal Server Error\r\n"\
-							"Access-Control-Allow-Origin: *\r\n"\
-							"Content-Type: text/html; charset=utf-8\r\n\r\n";
-							
-char res_header_err400[] = "HTTP/1.1 400 Bad Request\r\n\r\n";
+char http_head[] = "HTTP/1.1 ";
+char http_status_200[] = "200 OK\r\n";
+char http_status_201[] = "201 Created\r\n";
+char http_status_204[] = "204 No Content\r\n";
+char http_status_500[] = "500 Internal Server Error\r\n";
+char http_status_400[] = "400 Bad Request\r\n";
+
+char keep_alive_resp[] = "Connection: Keep-Alive\r\n";
+char keep_alive_resp_param[] = "Keep-Alive: timeout=2, max=100\r\n";
+
+char h1_200[] = "Access-Control-Allow-Origin: *\r\n"\
+				"Content-Type: application/td+json; charset=utf-8\r\n\r\n";
+
+char h1_201[] = "Access-Control-Allow-Origin: *\r\n"\
+				"Content-Type: application/json; charset=utf-8\r\n\r\n";
+
+char h1_204[] = "Access-Control-Allow-Origin: *\r\n"\
+				"Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n"\
+				"Access-Control-Allow-Headers: content-type\r\n"\
+				"Access-Control-Max-Age: 86400\r\n\r\n";
+
+char h1_500[] = "Access-Control-Allow-Origin: *\r\n"\
+				"Content-Type: text/html; charset=utf-8\r\n\r\n";
+				
+
+//*********************************
+char *prepare_http_header(int16_t status, bool keep_alive);
+//parse html request
+int16_t parse_http_request(char *rq, 
+							char **res, 
+							uint16_t tcp_len, 
+							connection_desc_t *conn_desc);
 
 
 /**********************************************************************
@@ -48,10 +63,14 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	uint8_t res = 0;
 	char *rs;
 	int len;
+	
+	//printf("rq:\n%s\n", rq); //test
 
-	parse_http_request(rq, &rs, tcp_len);
+	parse_http_request(rq, &rs, tcp_len, conn_desc);
+	
+	//printf("resp:\n%s\n", rs); //test
 
-	//send response - the whole (with http header) is in "rs" buffer,
+	//send response (rs)
 	len = strlen(rs);
 	err_t err = netconn_write(conn_desc -> netconn_ptr,
 								rs,
@@ -62,7 +81,7 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 	}
 
 	free(rs);
-	conn_desc -> run = CONN_STOP; //close http connection
+	//conn_desc -> run = CONN_STOP; //close http connection
 
 	return res;
 }
@@ -77,57 +96,69 @@ uint8_t http_receive(char *rq, uint16_t tcp_len, connection_desc_t *conn_desc){
 * 	error code or 1 (success)
 * parse html request
 ************************************************************************/
-int16_t parse_http_request(char *rq, char **res, uint16_t len){
-	int16_t result = 0;
+int16_t parse_http_request(char *rq, 
+							char **res, 
+							uint16_t len, 
+							connection_desc_t *conn_desc){
+	int16_t status = 0;
 	char *buff = NULL, *res_buff = NULL, *http_header;
 	int res_len = 0;
+	bool keep_alive = false;
 
 	if(rq[0] == 'G' && rq[1] == 'E' && rq[2] == 'T'){
 		//GET request
-		result = get_parser(rq, &buff, root_node.things_quantity, len);
+		status = get_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else if (rq[0] == 'P' && rq[1] == 'U' && rq[2] == 'T'){
 		//PUT request
-		result = put_parser(rq, &buff, root_node.things_quantity, len);
+		status = put_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else if (rq[0] == 'P' && rq[1] == 'O' && rq[2] == 'S' && rq[3] == 'T'){
 		//POST request
-		result = post_parser(rq, &buff, root_node.things_quantity, len);
+		status = post_parser(rq, &buff, root_node.things_quantity, len);
 	}
 	else if (rq[0] == 'O' && rq[1] == 'P' && rq[2] == 'T' && rq[3] == 'I' && rq[4] == 'O' &&
 			rq[5] == 'N' && rq[6] == 'S'){
 		//OPTIONS request
 		//Cross-Origin Resource Sharing (CORS)
-		result = 204;
+		status = 204;
 	}
 	else{
-		result = 500;
+		status = 500;
 	}
 
 	if (buff != NULL){
 		res_len = strlen(buff);
 	}
-	
-	if (result == 200){
+	/*
+	if (status == 200){
 		http_header = res_header_ok;
 	}
-	else if (result == 201){
+	else if (status == 201){
 		http_header = res_header_201;
 	}
-	else if (result == 204){
+	else if (status == 204){
 		http_header = res_header_204;
 	}
-	else if (result == 400){
+	else if (status == 400){
 		http_header = res_header_err400;
 	}
 	else{
 		http_header = res_header_err500;
 	}
+	*/
+	if ((conn_desc -> connection == CONN_HTTP_KEEP_ALIVE) ||
+		(conn_desc -> connection == CONN_HTTP_RUNNING)){
+		keep_alive = true;
+	}
+	http_header = prepare_http_header(status, keep_alive);
 	
 	res_buff = malloc(strlen(http_header) + res_len + 10);
 	res_buff[0] = 0;
 	//memset(res_buff, 0, strlen(http_header) + res_len + 10);
 	strcat(res_buff, http_header);
+	
+	free(http_header);
 
 	if (buff != NULL){
 		strcat(res_buff, buff);
@@ -136,7 +167,95 @@ int16_t parse_http_request(char *rq, char **res, uint16_t len){
 
 	*res = res_buff;
 
-	return result;
+	return status;
+}
+
+
+/**************************************************
+*
+* prepare HTTP header for HTTP response
+*
+***************************************************/
+char *prepare_http_header(int16_t status, bool keep_alive){
+	char *http_header = NULL;
+	int16_t len;
+	
+	switch(status){
+	case 200:
+		len = 20 + strlen(http_status_200) + strlen(h1_200);
+		if (keep_alive == true){
+			len += strlen(keep_alive_resp) + strlen(keep_alive_resp_param);
+		}
+		http_header = malloc(len);
+		memset(http_header, 0, len);
+		strcat(http_header, http_head);
+		strcat(http_header, http_status_200);
+		if (keep_alive == true){
+			strcat(http_header, keep_alive_resp);
+			strcat(http_header, keep_alive_resp_param);
+		}
+		strcat(http_header, h1_200);
+		break;
+
+	case 201:
+		len = 20 + strlen(http_status_201) + strlen(h1_201);
+		if (keep_alive == true){
+			len += strlen(keep_alive_resp) + strlen(keep_alive_resp_param);
+		}
+		http_header = malloc(len);
+		memset(http_header, 0, len);
+		strcat(http_header, http_head);
+		strcat(http_header, http_status_201);
+		if (keep_alive == true){
+			strcat(http_header, keep_alive_resp);
+			strcat(http_header, keep_alive_resp_param);
+		}
+		strcat(http_header, h1_201);
+		break;
+
+	case 204:
+		len = 20 + strlen(http_status_204) + strlen(h1_204);
+		if (keep_alive == true){
+			len += strlen(keep_alive_resp) + strlen(keep_alive_resp_param);
+		}
+		http_header = malloc(len);
+		memset(http_header, 0, len);
+		strcat(http_header, http_head);
+		strcat(http_header, http_status_204);
+		if (keep_alive == true){
+			strcat(http_header, keep_alive_resp);
+			strcat(http_header, keep_alive_resp_param);
+		}
+		strcat(http_header, h1_204);
+		break;
+
+	case 500:
+		len = 20 + strlen(http_status_500) + strlen(h1_500);
+		http_header = malloc(len);
+		memset(http_header, 0, len);
+		strcat(http_header, http_head);
+		strcat(http_header, http_status_500);
+		strcat(http_header, h1_500);
+		break;
+
+	case 400:
+	default:
+		len = 20 + strlen(http_status_400);
+		if (keep_alive == true){
+			len += strlen(keep_alive_resp) + strlen(keep_alive_resp_param);
+		}
+		http_header = malloc(len);
+		memset(http_header, 0, len);
+		strcat(http_header, http_head);
+		strcat(http_header, http_status_400);
+		if (keep_alive == true){
+			strcat(http_header, keep_alive_resp);
+			strcat(http_header, keep_alive_resp_param);
+		}
+		strcat(http_header, "\r\n");
+	}
+	
+	return http_header;
 }
 
 /************************************************************************
@@ -285,7 +404,7 @@ int16_t post_parser(char *rq, char **res, uint16_t things, uint16_t len){
 				break;
 
 			default:
-				printf("http parser, ERROR: URL too long\n");
+				printf("POST parser, ERROR: URL too long\n");
 				url_end = true;
 			}
 			url = ptr_3;
@@ -476,7 +595,7 @@ int16_t put_parser(char *rq, char **res, uint16_t things, uint16_t tcp_len){
 				break;
 
 			default:
-				printf("http parser, ERROR: URL too long\n");
+				printf("PUT parser, ERROR: URL too long\n");
 				url_end = true;
 				result = 400;
 			}
@@ -647,7 +766,7 @@ int16_t get_parser(char *rq, char **res, uint16_t things, uint16_t len){
 					break;
 
 				default:
-					printf("http parser, ERROR: URL too long\n");
+					printf("GET parser, ERROR: URL too long\n");
 					url_end = true;
 				}
 				url = ptr_3;
