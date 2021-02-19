@@ -1,8 +1,8 @@
 /*
  * common.h
  *
- *  Created on: june 02, 2019
- *  Last edit on: June 17, 2019
+ *  Created on: Jun 02, 2019
+ *  Last edit on: Feb 19, 2021
  *      Author: Krzysztof Zurek
  *      krzzurek@gmail.com
  */
