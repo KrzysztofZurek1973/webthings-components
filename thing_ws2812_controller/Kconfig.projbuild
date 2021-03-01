@@ -1,0 +1,14 @@
+menu "RGB Controller"
+
+config PIN_WS2812_DATA
+    int "WS2812 Data GPIO number"
+	range 0 34
+	default 25
+	help
+		GPIO number (IOxx) to send RGB data via SPI interface.
+
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
+
+		GPIOs 35-39 are input-only so cannot be used to drive the One Wire Bus.
+		
+endmenu

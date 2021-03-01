@@ -45,6 +45,17 @@ static int dt_max = 50;
 static int led_state = 0;
 static int led_freq = 20; //Hz x 10
 
+
+/* ------ TEST ---------- */
+void set_led_pin(void){
+	int pin_val;
+	
+	pin_val = gpio_get_level(GPIO_LED);
+	pin_val ^= 1;
+	gpio_set_level(GPIO_LED, pin_val);
+}
+
+
 /****************************************************
 *
 * blinking led thread function
@@ -60,6 +71,10 @@ void blinking_led_fun(void *param){
 				dt_counter = 0;
 				if (led_blinking == true){
 					xSemaphoreTake(led_mux, portMAX_DELAY);
+					//led_state = gpio_get_level(GPIO_LED);
+					//led_state ^= 1;
+					//gpio_set_level(GPIO_LED, led_state);
+					
 					if (led_state == 0){
 						gpio_set_level(GPIO_LED, 1);
 						led_state = 1;
@@ -68,6 +83,7 @@ void blinking_led_fun(void *param){
 						gpio_set_level(GPIO_LED, 0);
 						led_state = 0;
 					}
+					
 					xSemaphoreGive(led_mux);
 				}
 			}

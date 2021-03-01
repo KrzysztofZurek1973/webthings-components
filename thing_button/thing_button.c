@@ -68,6 +68,10 @@ void button_fun(void *pvParameter){
 		//wait for button pressed
 		xSemaphoreTake(button_sem, portMAX_DELAY);
 		
+		//test
+		printf("irq: %i, irq_fun: %i\n", irq_counter_1, irq_counter);
+		//test end
+		
 		//wait a bit to avoid button vibration
 		//vTaskDelay(200 / portTICK_PERIOD_MS);
 		int button_value = gpio_get_level(GPIO_BUTTON);
@@ -106,9 +110,6 @@ void button_fun(void *pvParameter){
 			}
 			inform_all_subscribers_prop(prop_pushed);
 		}
-		//test
-		printf("irq: %i, irq_fun: %i\n", irq_counter_1, irq_counter);
-		//test end
 		
 		if (button_ready == false){
 			button_ready = true;
