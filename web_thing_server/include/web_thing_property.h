@@ -36,10 +36,10 @@ struct link_t{
 	char *href;
 };
 
-typedef union max_min_val{
+typedef union {
 	int32_t int_val;
 	float float_val;
-} min_max_t;
+} int_float_u;
 
 struct property_t{
 	char *id;
@@ -48,8 +48,9 @@ struct property_t{
 	VAL_TYPE type;
 	char *description;
 	void *value;
-	min_max_t min_value;
-	min_max_t max_value;
+	int_float_u min_value;
+	int_float_u max_value;
+	int_float_u multiple_of;
 	char *unit;
 	bool enum_prop;
 	enum_item_t *enum_list;
