@@ -74,10 +74,29 @@ typedef enum{
 typedef struct thing_t thing_t;
 typedef struct property_t property_t;
 typedef struct at_type_t at_type_t;
+typedef struct enum_item_t enum_item_t;
+
+typedef union {
+	int32_t int_val;
+	float float_val;
+} int_float_u;
 
 struct at_type_t{
 	char *at_type;
 	at_type_t *next;
+};
+
+union enum_value_t{
+	bool bool_val;
+	int int_val;
+	float float_val;
+	char *str_addr;
+};
+
+struct enum_item_t{
+	union enum_value_t value;
+	bool current;
+	enum_item_t *next;
 };
 
 typedef struct{

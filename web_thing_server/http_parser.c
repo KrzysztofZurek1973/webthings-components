@@ -130,23 +130,7 @@ int16_t parse_http_request(char *rq,
 	if (buff != NULL){
 		res_len = strlen(buff);
 	}
-	/*
-	if (status == 200){
-		http_header = res_header_ok;
-	}
-	else if (status == 201){
-		http_header = res_header_201;
-	}
-	else if (status == 204){
-		http_header = res_header_204;
-	}
-	else if (status == 400){
-		http_header = res_header_err400;
-	}
-	else{
-		http_header = res_header_err500;
-	}
-	*/
+
 	if ((conn_desc -> connection == CONN_HTTP_KEEP_ALIVE) ||
 		(conn_desc -> connection == CONN_HTTP_RUNNING)){
 		keep_alive = true;

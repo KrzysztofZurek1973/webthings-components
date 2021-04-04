@@ -380,7 +380,6 @@ int request_action(int8_t thing_nr, char *action_id, char *inputs){
 	thing_t *t = NULL;
 	action_t *a = NULL;
 	int out_index = -1;
-	int8_t run_result = -1;
 
 	//find thing
 	t = get_thing_ptr(thing_nr);
@@ -391,18 +390,26 @@ int request_action(int8_t thing_nr, char *action_id, char *inputs){
 		//run action
 		if (a != NULL){
 			if (a -> running_request_index == -1){
-				run_result = a -> run(inputs);
-				if (run_result >= 0){
-					//add request to the list
-					out_index = add_request_to_list(a, inputs);
+				if (a -> run != NULL){
+					//TODO: call "run" separately for every input
+					//.e.g. run(char *input_name, void *value, VAL_TYPE type)
+					//maybe VAL_TYPE is not necessary?
+					int16_t run_result = a -> run(inputs);
+					if (run_result >= 0){
+						out_index = add_request_to_list(a, inputs);
+						//if run function fails finish action now with status "FAILED"
+						if (run_result < 0){
+							complete_action(thing_nr, action_id, ACT_FAILED);
+						}
+					}
 				}
 			}
 		}
-
 	}
 
 	return out_index;
 }
+
 
 /*************************************************************************
 *

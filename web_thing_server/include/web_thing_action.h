@@ -2,6 +2,7 @@
  * web_thing_action.h
  *
  *  Created on: Jun 27, 2019
+ *	Last update: Apr 02, 2021
  *      Author: kz
  */
 
@@ -17,7 +18,7 @@ typedef struct action_t action_t;
 typedef struct action_input_prop_t action_input_prop_t;
 typedef struct action_request_t action_request_t;
 typedef struct request_value_t request_value_t;
-typedef int8_t (action_run_callback_t)(char *new_value);
+typedef int16_t (action_run_callback_t)(char *new_value);
 typedef char *(jsonize_t)(property_t *p);
 
 //thing action
@@ -41,10 +42,14 @@ struct action_input_prop_t{
 	char *id;
 	VAL_TYPE type;
 	bool required;
-	double *min_value;
-	double *max_value;
+	int_float_u min_value;
+	bool min_valid;
+	int_float_u max_value;
+	bool max_valid;
 	char *unit;
 	int input_prop_index;
+	bool enum_prop;
+	enum_item_t *enum_list;
 	action_input_prop_t *next;
 };
 
@@ -67,8 +72,14 @@ struct request_value_t{
 
 action_t *
 	action_init(void);
-action_input_prop_t *
-	action_input_prop_init(char *, VAL_TYPE, bool, double*, double*, char*);
+action_input_prop_t *action_input_prop_init(char *,
+											VAL_TYPE,
+											bool,			//required
+											int_float_u*,	//min
+											int_float_u*,	//max
+											char*,			//unit
+											bool,			//enum
+											enum_item_t*);	//enum list
 action_t *
 	get_action_ptr(thing_t *t, char *action_id);
 void

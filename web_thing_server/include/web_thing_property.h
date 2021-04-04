@@ -11,14 +11,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-//#include "simple_web_thing_server.h"
 #include "web_thing.h"
 #include "common.h"
 
 #define PROP_VAL_LEN 50
 
 typedef struct link_t link_t;
-typedef struct enum_item_t enum_item_t;
 /*
  * if new value is different then the old one set_callback_t must return "1" (one)
  */
@@ -35,11 +33,6 @@ struct link_t{
 	char *rel;
 	char *href;
 };
-
-typedef union {
-	int32_t int_val;
-	float float_val;
-} int_float_u;
 
 struct property_t{
 	char *id;
@@ -66,17 +59,6 @@ struct property_t{
 	xSemaphoreHandle mux;
 };
 
-union enum_value_t{
-	int int_val;
-	float float_val;
-	char *str_addr;
-};
-
-struct enum_item_t{
-	union enum_value_t value;
-	bool current;
-	enum_item_t *next;
-};
 
 property_t *property_init(jsonize_t *vj, jsonize_t *mj);
 char *property_model_jsonize(property_t *t, int16_t thing_id);

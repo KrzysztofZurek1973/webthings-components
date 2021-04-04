@@ -115,7 +115,7 @@ int thing_jsonize(thing_t *t, char *host, char *domain, uint16_t port, char *buf
 					"{\"rel\":\"events\",\"href\":\"%s/events\"},"\
 					"{\"rel\":\"alternate\",\"href\":\"ws://%s.%s:%i%s\"}";
 
-	char *links_buff, lk[6], lk_1[6], *props = NULL; //*buff 
+	char *links_buff, lk[6], lk_1[6], *props = NULL; 
 	char *actions = NULL, *events = NULL, *at_types = NULL;
 	int len = 0;
 
@@ -131,7 +131,6 @@ int thing_jsonize(thing_t *t, char *host, char *domain, uint16_t port, char *buf
 	int tq = t -> type_quantity;
 	if (tq > 0){
 		at_types = malloc(tq * 30);
-		//memset(at_types, 0, tq * 30);
 		at_type_t *at = t -> at_type;
 		if (tq > 1){
 			for (int i = tq; i > 0; i--){
@@ -186,7 +185,6 @@ int thing_jsonize(thing_t *t, char *host, char *domain, uint16_t port, char *buf
 char *get_thing(thing_t *t, int16_t thing_index, char *host,
 				char *domain, uint16_t port){
 	char *buff = NULL; //*res_buff = NULL, 
-	//thing_t *t;
 
 	//find thing in the tree
 	while (t != NULL){
@@ -205,14 +203,7 @@ char *get_thing(thing_t *t, int16_t thing_index, char *host,
 	buff[0] = '{';
 	buff[1] = 0;
 	thing_jsonize(t, host, domain, port, buff + 1);
-	//res_buff = malloc(strlen(buff_1) + 2);
-	//memset(res_buff, 0, strlen(buff_1) + 2);
-	//strcat(res_buff, "{");
-	//strcat(res_buff, buff_1);
-	//strcat(res_buff, "}");
 	strcat(buff, "}");
-	
-	//free(buff_1);
 
 	return buff;
 }

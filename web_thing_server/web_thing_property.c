@@ -47,23 +47,29 @@ char *get_properties_model(thing_t *t){
 	property_t *p;
 
 	int pq = t -> prop_quant;
-	prop = malloc(pq * (PROP_MODEL_LEN + 5));
-	memset(prop, 0, pq * (PROP_MODEL_LEN + 5));
+	if (pq > 0){
+		prop = malloc(pq * (PROP_MODEL_LEN + 5));
+		memset(prop, 0, pq * (PROP_MODEL_LEN + 5));
 
-	p = t -> properties;
-	if (pq > 1){
-		for (int i = pq; i > 0; i--){
-			buff_temp = property_model_jsonize(p, t -> thing_nr);
-			strcat(prop, buff_temp);
-			free(buff_temp);
-			if (i != 1){
-				strcat(prop, ",");
+		p = t -> properties;
+		if (pq > 1){
+			for (int i = pq; i > 0; i--){
+				buff_temp = property_model_jsonize(p, t -> thing_nr);
+				strcat(prop, buff_temp);
+				free(buff_temp);
+				if (i != 1){
+					strcat(prop, ",");
+				}
+				p = p -> next;
 			}
-			p = p -> next;
+		}
+		else{
+			prop = property_model_jsonize(p, t -> thing_nr);
 		}
 	}
 	else{
-		prop = property_model_jsonize(p, t -> thing_nr);
+		prop = malloc(3);
+		strcpy(prop, "");
 	}
 
 	return prop;
@@ -75,6 +81,197 @@ char *get_properties_model(thing_t *t){
  * create json model for property
  *
  *********************************************************/
+char *property_model_jsonize(property_t *p, int16_t thing_index){
+	char prop_str[] = "\"%s\":{\"@type\":\"%s\",\"title\":\"%s\","\
+					"\"type\":\"%s\",%s\"description\":\"%s\",%s"\
+					"\"readOnly\":%s,\"links\":"\
+					"[{\"rel\":\"property\",\"href\":\"/%i/properties/%s\"}]}";
+
+	char num_str[] = "\"minimum\":%s,\"maximum\":%s,";
+	char num_str_unit[] = "\"unit\":\"%s\",";
+	char *type[] = {"null", "boolean", "object", "array",
+					"number", "integer", "string"};
+	char *bool_str[] = {"false", "true"};
+
+	char *buff = NULL, *buff1, *buff_enum = NULL;
+	char buff_min[15], buff_max[15], buff_temp[20];
+	bool build_json = false;
+	//char buff_multi[10];
+
+	if (p -> type == VAL_NULL){
+		return NULL;
+	}
+
+	//clear buffers
+	buff1 = malloc(200);
+	memset(buff1, 0, 200);
+	memset(buff_min, 0, 15);
+	memset(buff_max, 0, 15);
+	memset(buff_temp, 0, 20);
+
+	if (p -> type == VAL_INTEGER){
+		if (p -> min_value.int_val != p -> max_value.int_val){
+			sprintf(buff_min, "%i", (int32_t)(p -> min_value.int_val));
+			sprintf(buff_max, "%i", (int32_t)(p -> max_value.int_val));
+			sprintf(buff1, num_str, buff_min, buff_max);
+
+			if (p -> unit != NULL){
+				sprintf(buff_temp, "\"unit\":\"%s\",", p -> unit);
+				strcat(buff1, buff_temp);
+			}
+		}
+		else{
+			if (p -> unit != NULL){
+				sprintf(buff1, num_str_unit, p -> unit);
+			}
+		}
+
+		if ((p -> enum_prop == true) && (p -> enum_list != NULL)){
+			//enum value
+			char buff[20];
+			buff_enum = malloc(200); //TODO: calculate needed place
+			strcpy(buff_enum, "\"enum\":[");
+			enum_item_t *enum_item;
+			int enum_i = 0;
+
+			enum_item  = p -> enum_list;
+			memset(buff, 0, 20);
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				sprintf(buff, "%i", enum_item -> value.int_val);
+				strcat(buff_enum, buff);
+				memset(buff, 0, 20);
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "],");
+		}
+		build_json = true;
+	}
+	else if (p -> type == VAL_NUMBER){
+		if (p -> min_value.float_val != p -> max_value.float_val){
+			sprintf(buff_min, "%5.3f", p -> min_value.float_val);
+			sprintf(buff_max, "%5.3f", p -> max_value.float_val);
+			sprintf(buff1, num_str, buff_min, buff_max);
+
+			if (p -> unit != NULL){
+				sprintf(buff_temp, "\"unit\":\"%s\",", p -> unit);
+				strcat(buff1, buff_temp);
+			}
+		}
+		else{
+			if (p -> unit != NULL){
+				sprintf(buff1, num_str_unit, p -> unit);
+			}
+		}
+		if ((p -> enum_prop == true) && (p -> enum_list != NULL)){
+			//enum value
+			char buff_loc[20];
+			buff_enum = malloc(200); //TODO: calculate needed place
+			strcpy(buff_enum, "\"enum\":[");
+			enum_item_t *enum_item;
+			int enum_i = 0;
+
+			enum_item  = p -> enum_list;
+			memset(buff_loc, 0, 20);
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				sprintf(buff_loc, "%5.3f", enum_item -> value.float_val);
+				strcat(buff_enum, buff_loc);
+				memset(buff_loc, 0, 20);
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "],");
+		}
+		build_json = true;
+	}
+	else if (p -> type == VAL_BOOLEAN){
+		build_json = true;
+	}
+	else if (p -> type == VAL_OBJECT){
+		if (p -> model_jsonize != NULL){
+			buff1 = p -> model_jsonize(p);
+			build_json = true;
+		}
+		else{
+			printf("VAL_OBJECT: jsonization failed\n");
+		}
+	}
+	else if (p -> type == VAL_STRING){
+		if (p -> enum_prop == false){
+			if (p -> model_jsonize != NULL){
+				buff1 = p -> model_jsonize(p);
+				build_json = true;
+			}
+			else{
+				printf("object jsonization failed\n");
+			}
+		}
+		else{
+			//enum value
+			buff_enum = malloc(200); //TODO: calculate needed place
+			strcpy(buff_enum, "\"enum\":[");
+			enum_item_t *enum_item;
+			int enum_i = 0;
+
+			enum_item  = p -> enum_list;
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				strcat(buff_enum, "\"");
+				strcat(buff_enum, enum_item -> value.str_addr);
+				strcat(buff_enum, "\"");
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "],");
+			build_json = true;
+		}
+		//build_json = true;
+	}
+	else if (p -> type == VAL_ARRAY){
+		if (p -> model_jsonize != NULL){
+			buff1 = p -> model_jsonize(p);
+			build_json = true;
+		}
+		else{
+			printf("VAL_ARRAY: jsonization failed\n");
+		}
+	}
+
+	if (build_json == true){
+		buff = malloc(PROP_MODEL_LEN);
+		if (buff_enum != NULL){
+			sprintf(buff, prop_str, p -> id, p -> at_type -> at_type, p -> title,
+					type[p -> type], buff_enum, p -> description, buff1,
+					bool_str[p -> read_only], thing_index, p -> id);
+		}
+		else{
+			sprintf(buff, prop_str, p -> id, p -> at_type -> at_type, p -> title,
+					type[p -> type], "", p -> description, buff1,
+					bool_str[p -> read_only], thing_index, p -> id);
+		}
+	}
+
+	free(buff_enum);
+	free(buff1);
+
+	return buff;
+}
+
+
+/* *************************************************************************
+ *
+ * create json model for property
+ *
+ *********************************************************/
+ /*
 char *property_model_jsonize(property_t *p, int16_t thing_index){
 	char prop_str[] = "\"%s\":{\"@type\":\"%s\",\"title\":\"%s\","\
 					"\"type\":\"%s\",%s\"description\":\"%s\",%s"\
@@ -259,6 +456,7 @@ char *property_model_jsonize(property_t *p, int16_t thing_index){
 	
 	return buff;
 }
+*/
 
 
 /************************************************************************

@@ -26,17 +26,15 @@
 
 xSemaphoreHandle DRAM_ATTR led_mux;
 xTaskHandle blinking_led_task; //blinking led RTOS task
-static TimerHandle_t constant_on_timer = NULL;
+static TimerHandle_t action_timer = NULL;
 
 thing_t *blinking_led = NULL;
 property_t *prop_led_on = NULL, *prop_led_freq = NULL;
-action_t *constant_on = NULL;
-action_input_prop_t *led_on_duration;
-double constant_on_duration_min = 1; //seconds
-double constant_on_duration_max = 600;
+action_t *action_settings;
+at_type_t settings_attype;
+int16_t action_run(char *inputs);
 at_type_t blinking_led_type, prop_led_on_type, prop_led_freq_type;
-at_type_t constant_on_input_attype;
-action_input_prop_t *constant_on_duration;
+action_input_prop_t *input_timer, *input_mode, *input_pattern, *input_sensor;
 
 static bool led_is_on = true;
 static bool led_blinking = true;
@@ -45,8 +43,12 @@ static int dt_max = 50;
 static int led_state = 0;
 static int led_freq = 20; //Hz x 10
 
+enum_item_t enum_mode_rgb, enum_mode_rgb_white, enum_mode_white;
+enum_item_t patt_1, patt_2, patt_3, patt_4;
+
 
 /* ------ TEST ---------- */
+/*
 void set_led_pin(void){
 	int pin_val;
 	
@@ -54,6 +56,7 @@ void set_led_pin(void){
 	pin_val ^= 1;
 	gpio_set_level(GPIO_LED, pin_val);
 }
+*/
 
 
 /****************************************************
@@ -178,9 +181,11 @@ int16_t led_set_frequency(char *new_value_str){
  * Stop constant ON and back to blinking
  *
  * *****************************************************/
-void constant_on_timer_fun(TimerHandle_t xTimer){
+void action_timer_fun(TimerHandle_t xTimer){
 	
-	complete_action(1, "constant_on", ACT_COMPLETED);
+	printf("Timer fun: Complete action\n");
+	
+	complete_action(1, "settings", ACT_COMPLETED);
 	
 	xSemaphoreTake(led_mux, portMAX_DELAY);
 	led_blinking = true;
@@ -193,6 +198,144 @@ void constant_on_timer_fun(TimerHandle_t xTimer){
 }
 
 
+/**********************************************************
+ *
+ * run action function
+ * inputs:
+ * 		- duration
+ * 		- mode
+ * 		- color
+ *
+ * *******************************************************/
+
+int16_t action_run(char *inputs){
+	int duration = 0, len, mode = 0;
+	int16_t inputs_exec = -1;
+	char *p1, *p2, buff[20];
+
+	printf("Run inputs: %s\n", inputs);
+
+	//get duration ------------------------------------------------
+	p1 = strstr(inputs, "timer");
+	if (p1 == NULL) goto timer_run_mode;
+	p1 = strchr(p1, ':');
+	if (p1 == NULL) goto timer_run_mode;
+	p2 = strchr(p1, ',');
+	if (p2 == NULL){
+		len = strlen(p1 + 1);
+	}
+	else{
+		len = p2 - p1 - 1;
+	}
+	memset(buff, 0, 20);
+	memcpy(buff, p1 + 1, len);
+	duration = atoi(buff);
+	if ((duration < 600) || (duration > 0)){
+		inputs_exec++;
+		printf("timer: %i\n", duration);
+	}
+	else{
+		goto timer_run_mode;
+	}
+
+	//get mode --------------------------------------------------------
+timer_run_mode:
+	p1 = strstr(inputs, "mode");
+	if (p1 == NULL) goto timer_run_sensor;
+	p1 = strchr(p1, ':');
+	if (p1 == NULL) goto timer_run_sensor;
+	p2 = strchr(p1, ',');
+	if (p2 == NULL){
+		len = strlen(p1 + 1);
+	}
+	else{
+		len = p2 - p1 - 1;
+	}
+	if (strstr(p1 + 1, "COLOR+WHITE") != NULL){
+		mode = 0;
+	}
+	else if (strstr(p1 + 1, "COLOR") != NULL){
+		mode = 1;
+	}
+	else if (strstr(p1 + 1, "WHITE") != NULL){
+		mode = 2;
+	}
+	else{
+		goto timer_run_sensor;
+	}
+	inputs_exec++;
+	printf("mode: %i\n", mode);
+	
+	//get sensor active --------------------------------------------------------
+timer_run_sensor:
+	p1 = strstr(inputs, "sensor");
+	if (p1 == NULL) goto timer_run_pattern;
+	p1 = strchr(p1, ':');
+	if (p1 == NULL) goto timer_run_pattern;
+	p2 = strchr(p1, ',');
+	if (p2 == NULL){
+		len = strlen(p1 + 1);
+	}
+	else{
+		len = p2 - p1 - 1;
+	}
+	memset(buff, 0, 20);
+	memcpy(buff, p1 + 1, len);
+	bool sensor_active = false;
+	p1 = strstr(buff, "true");
+	if (p1 != NULL){
+		sensor_active = true;
+	}
+	
+	if (sensor_active == true){
+		printf("sensor ACTIVE\n");
+	}
+	else{
+		printf("sensor NOT ACTIVE\n");
+	}
+	
+	inputs_exec++;
+
+	//get color ---------------------------------------------------
+timer_run_pattern:
+	p1 = strstr(inputs, "pattern");
+	if (p1 == NULL) goto timer_run_end;
+	p1 = strchr(p1, ':');
+	if (p1 == NULL) goto timer_run_end;
+	p2 = strchr(p1, ',');
+	if (p2 == NULL){
+		len = strlen(p1 + 1) - 2;
+	}
+	else{
+		len = p2 - p1 - 3;
+	}
+	if (len > 19){
+		len = 19;
+	}
+	memset(buff, 0, 20);
+	memcpy(buff, p1 + 2, len);
+	inputs_exec++;
+	printf("pattern: %s\n", buff);
+
+timer_run_end:
+	if (inputs_exec >= 0){
+		//start timer
+		action_timer = xTimerCreate("action_timer",
+									pdMS_TO_TICKS(1000),
+									pdFALSE,
+									pdFALSE,
+									action_timer_fun);
+		//xSemaphoreGive(led_mux);
+		
+		if (xTimerStart(action_timer, 5) == pdFAIL){
+			printf("action timer failed\n");
+		}
+	}
+	printf("run return: %i\n", inputs_exec);
+	
+	return inputs_exec;
+}
+
 
 /**********************************************************
  *
@@ -201,11 +344,14 @@ void constant_on_timer_fun(TimerHandle_t xTimer){
  * 		- seconds of turn ON in json format, e.g.: "duration":10
  *
  * *******************************************************/
-int8_t constant_on_run(char *inputs){
+ /*
+int16_t constant_on_run(char *inputs){
 	int duration = 0, len;
 	char *p1, buff[6];
 
-	if (led_blinking == true){
+	printf("Run inputs:\n%s\n", inputs);
+
+	//if (led_blinking == true){
 		//get duration value
 		p1 = strstr(inputs, "duration");
 		if (p1 == NULL){
@@ -231,17 +377,18 @@ int8_t constant_on_run(char *inputs){
 		led_blinking = false;
 		
 		//start timer
-		constant_on_timer = xTimerCreate("constant_on_timer",
+		action_timer = xTimerCreate("on_timer",
 									pdMS_TO_TICKS(duration * 1000),
 									pdFALSE,
 									pdFALSE,
-									constant_on_timer_fun);
+									action_timer_fun);
 		xSemaphoreGive(led_mux);
 		
-		if (xTimerStart(constant_on_timer, 5) == pdFAIL){
+		if (xTimerStart(action_timer, 5) == pdFAIL){
 			printf("action timer failed\n");
 		}
-	}
+	//}
+	
 
 	return 0;
 
@@ -249,6 +396,7 @@ int8_t constant_on_run(char *inputs){
 	printf("constant ON ERROR\n");
 	return -1;
 }
+*/
 
 
 /*****************************************************************
@@ -266,7 +414,7 @@ thing_t *init_blinking_led(void){
 	
 	blinking_led -> id = "Led";
 	blinking_led -> at_context = things_context;
-	blinking_led -> model_len = 1500;
+	blinking_led -> model_len = 3000;
 	//set @type
 	blinking_led_type.at_type = "Light";
 	blinking_led_type.next = NULL;
@@ -309,23 +457,88 @@ thing_t *init_blinking_led(void){
 
 	add_property(blinking_led, prop_led_freq); //add property to thing
 	
-	//create action "led_on", turn on led for specified seconds
-	constant_on = action_init();
-	constant_on -> id = "constant_on";
-	constant_on -> title = "Constant ON";
-	constant_on -> description = "Set led ON for some seconds";
-	constant_on -> run = constant_on_run;
-	constant_on_input_attype.at_type = "ToggleAction";
-	constant_on_input_attype.next = NULL;
-	constant_on -> input_at_type = &constant_on_input_attype;
-	constant_on_duration = action_input_prop_init("duration",
-							VAL_INTEGER, true,
-							&constant_on_duration_min,
-							&constant_on_duration_max,
-							"seconds");
-	add_action_input_prop(constant_on, constant_on_duration);
+	//---------------------------------------------
+	//create action "settings"
+	action_settings = action_init();
+	action_settings -> id = "settings";
+	action_settings -> title = "SETTINGS";
+	action_settings -> description = "More settings";
+	action_settings -> run = action_run;
+	settings_attype.at_type = "ToggleAction";
+	settings_attype.next = NULL;
+	action_settings -> input_at_type = &settings_attype;
 	
-	add_action(blinking_led, constant_on);
+	/*define action input properties
+	*  input parameters:
+	*	- type, e.g. VAL_INTEGER, VAL_STRING, VAL_BOOLEAN, VAL_NUMBER
+	*	- true: required, false: not required
+	*	- pointer to minimum value (type int_float_u)
+	*	- pointer to maximum value (type int_float_u)
+	*	- unit (as char array)
+	*	- true: enum values
+	*	- pointer to enum list (type enum_item_t)
+	*/
+	input_sensor = action_input_prop_init("sensor",
+											VAL_BOOLEAN,
+											false,
+											NULL,
+											NULL,
+											NULL,
+											false,
+											NULL);
+	add_action_input_prop(action_settings, input_sensor);
+	
+	int_float_u d_min, d_max;
+	d_min.int_val = 0;
+	d_max.int_val = 100;
+	input_timer = action_input_prop_init("timer",
+										VAL_INTEGER,//type
+										false,		//required
+										&d_min,		//min value
+										&d_max,		//max value
+										"minutes",	//unit
+										false,		//is enum
+										NULL);		//enum list pointer
+	add_action_input_prop(action_settings, input_timer);
+
+	//enums
+	enum_mode_rgb.value.str_addr = "COLOR+WHITE";
+	enum_mode_rgb.next = &enum_mode_rgb_white;
+	enum_mode_rgb_white.value.str_addr = "COLOR";
+	enum_mode_rgb_white.next = &enum_mode_white;
+	enum_mode_white.value.str_addr = "WHITE";
+	enum_mode_white.next = NULL;
+
+	input_mode = action_input_prop_init("mode",
+										VAL_STRING,
+										false,
+										NULL,
+										NULL,
+										NULL,
+										true,
+										&enum_mode_rgb);
+	add_action_input_prop(action_settings, input_mode);
+
+	//pattern names
+	patt_1.value.str_addr = "STATIC";
+	patt_1.next = &patt_2;
+	patt_2.value.str_addr = "RGB";
+	patt_2.next = &patt_3;
+	patt_3.value.str_addr = "COLOR PULSE";
+	patt_3.next = &patt_4;
+	patt_4.value.str_addr = "RGB PULSE";
+	patt_4.next = NULL;
+	input_pattern = action_input_prop_init("pattern",
+											VAL_STRING,
+											false,
+											NULL,
+											NULL,
+											NULL,
+											true,
+											&patt_1);
+	add_action_input_prop(action_settings, input_pattern);
+
+	add_action(blinking_led, action_settings);
 	
 	xTaskCreate(&blinking_led_fun, "blinking led", configMINIMAL_STACK_SIZE * 4,
 				NULL, 5, &blinking_led_task);

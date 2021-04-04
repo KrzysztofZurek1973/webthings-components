@@ -282,6 +282,7 @@ thing_t *init_thermometer(char *_thing_id){
 	prop_temperature -> value = &temperature;
 	prop_temperature -> max_value.float_val = 125.0;
 	prop_temperature -> min_value.float_val = -55.0;
+	prop_temperature -> multiple_of.float_val = 0.1;
 	prop_temperature -> unit = "degree celsius";
 	prop_temperature -> title = "Temperature";
 	prop_temperature -> read_only = true;

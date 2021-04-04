@@ -874,7 +874,7 @@ static void spiInit(void){
 	esp_err_t ret;
 	spi_bus_config_t buscfg = {
 			.miso_io_num = -1,
-	        .mosi_io_num = CONFIG_PIN_NUM_MOSI,
+	        .mosi_io_num = CONFIG_PIN_WS2812_DATA,
 	        .sclk_io_num = -1,
 	        .quadwp_io_num = -1,
 	        .quadhd_io_num = -1,

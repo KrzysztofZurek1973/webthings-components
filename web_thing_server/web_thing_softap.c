@@ -32,7 +32,7 @@
 
 //wifi AP data
 #define NODE_WIFI_SSID      "iot-node-ap"
-#define NODE_WIFI_PASS      "htqn9Fzv"
+#define NODE_WIFI_PASS      "12345678"
 #define MAX_WIFI_STA_CONN	1
 
 const char *WIFI_AP_TAG = "wifi softAP";

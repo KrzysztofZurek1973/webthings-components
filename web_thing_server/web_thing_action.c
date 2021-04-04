@@ -2,6 +2,7 @@
  * web_thing_action.c
  *
  *  Created on: Nov 22, 2019
+ *  Last update: Apr 2, 2021
  *      Author: kz
  *		 email: krzzurek@gmail.com
  */
@@ -14,17 +15,20 @@
 #include "web_thing.h"
 #include "web_thing_action.h"
 
+char TRUE[] = "true";
+char FALSE[] = "false";
+
 char *action_model_jsonize(action_t *p, int16_t thing_index);
 char *input_prop_jsonize(action_input_prop_t *aip);
 char *request_inputs_jsonize(action_t *a, action_request_t *ar);
 action_request_t *get_request_ptr(action_t *a, int request_index);
 
 
-/************************************************
+/******************************************************
  *
+ * Complete action, set status as "completed" and time
  *
- *
- * **********************************************/
+ * ****************************************************/
 int8_t complete_action(int thing_nr, char *action_id, ACTION_STATUS status){
 	int8_t res = -1;
 	thing_t *t = NULL;
@@ -158,14 +162,14 @@ char *request_inputs_jsonize(action_t *a, action_request_t *ar){
 		prop_qua++;
 		rv = rv -> next;
 	}
-	//count how long are input names
+	//calculate how long the names of the inputs are 
 	int id_len = 0;
 	action_input_prop_t *ipt = a -> input_properties;
 	while (ipt != NULL){
 		id_len += strlen(ipt -> id);
 		ipt = ipt -> next;
 	}
-	int inputs_len = prop_qua * 50 + id_len + prop_qua * 5 + 10;
+	int inputs_len = prop_qua * 50 + id_len + 10;
 	char *inputs = malloc(inputs_len);
 	memset(inputs, 0, inputs_len);
 
@@ -184,8 +188,8 @@ char *request_inputs_jsonize(action_t *a, action_request_t *ar){
 		}
 		if (prop_id != NULL){
 			if (rv -> value != NULL){
-				char *buff = malloc(strlen(ip -> id) + 10);
-				memset(buff, 0, strlen(ip -> id) + 10);
+				char *buff = malloc(strlen(ip -> id) + 30);
+				memset(buff, 0, strlen(ip -> id) + 30);
 				if (ip -> type == VAL_INTEGER){
 					sprintf(buff, prop_int_str, ip -> id, *(int *)(rv -> value));
 				}
@@ -194,6 +198,17 @@ char *request_inputs_jsonize(action_t *a, action_request_t *ar){
 				}
 				else if (ip -> type == VAL_STRING){
 					sprintf(buff, prop_str_str, ip -> id, (char *)(rv -> value));
+				}
+				else if (ip -> type == VAL_BOOLEAN){
+					if (*(int8_t *)(rv -> value) == 0){
+						sprintf(buff, prop_str_str, ip -> id, TRUE);
+					}
+					else{
+						sprintf(buff, prop_str_str, ip -> id, FALSE);
+					}
+				}
+				else{
+					printf("INPUT JSONIZE: unknown type\n");
 				}
 				strcat(inputs, buff);
 				free(buff);
@@ -208,6 +223,7 @@ char *request_inputs_jsonize(action_t *a, action_request_t *ar){
 	return inputs;
 }
 
+
 /*************************************************
  *
  * while action is requested add it to the list of action's requests
@@ -217,7 +233,7 @@ int add_request_to_list(action_t *a, char *inputs){
 	action_request_t *ar, *ar_last;
 	time_t t;
 	bool end_of_inputs = false;
-	char *p_start, *p1, *p2, name[15], value[15];
+	char *p_start, *p1, *p2, name[16], value[16];
 	request_value_t *rv = NULL, *prev_rv = NULL, *first_rv = NULL;
 	int next_index = -1;
 
@@ -227,11 +243,14 @@ int add_request_to_list(action_t *a, char *inputs){
 		memset(value, 0, 15);
 		//name
 		p1 = strchr(p_start, '"');
+		if (p1 == NULL) goto add_request_to_list_end;
 		p2 = strchr(p1 + 1, '"');
+		if (p2 == NULL) goto add_request_to_list_end;
 		int name_len = p2 - p1 - 1;
 		memcpy(name, p1 + 1, name_len);
 		//value
 		p1 = strchr(p2, ':');
+		if (p1 == NULL) goto add_request_to_list_end;
 		p2 = strchr(p1 + 1, ',');
 		if (p2 == NULL){
 			p2 = inputs + strlen(inputs);
@@ -242,7 +261,7 @@ int add_request_to_list(action_t *a, char *inputs){
 		}
 		int val_len = p2 - p1 - 1;
 		memcpy(value, p1 + 1, val_len);
-			if (name_len > 0){
+		if (name_len > 0){
 			action_input_prop_t *ap;
 			//find input property of this name
 			ap = a -> input_properties;
@@ -252,7 +271,7 @@ int add_request_to_list(action_t *a, char *inputs){
 				}
 				ap = ap -> next;
 			}
-				if (ap != NULL){
+			if (ap != NULL){
 				rv = malloc(sizeof(request_value_t));
 				if (prev_rv != NULL){
 					prev_rv -> next = rv;
@@ -276,10 +295,26 @@ int add_request_to_list(action_t *a, char *inputs){
 						rv -> value = num_value;
 					}
 					else if (ap -> type == VAL_STRING){
-						//TODO
+						char *str_value = malloc(val_len);
+						memcpy(str_value, value + 1, val_len - 2);
+						str_value[val_len - 2] = 0;
+						rv -> value = str_value;
+					}
+					else if (ap -> type == VAL_BOOLEAN){
+						int8_t *bool_num_val;
+
+						bool_num_val = malloc(sizeof(int8_t));
+						if (strstr(value, TRUE) != NULL){
+							*bool_num_val = 0;
+						}
+						else{
+							*bool_num_val = 1;
+						}
+						rv -> value = bool_num_val;
 					}
 					else{
 						//TODO
+						printf("ADD REQUEST: Unknown input type\n");
 					}
 				}
 				else{
@@ -337,6 +372,7 @@ int add_request_to_list(action_t *a, char *inputs){
 	a -> last_request_index = next_index;
 	a -> running_request_index = next_index;
 
+add_request_to_list_end:
 	return next_index;
 }
 
@@ -393,9 +429,9 @@ char *get_actions_model(thing_t *t){
  * *****************************************************/
 
 char *action_model_jsonize(action_t *a, int16_t thing_index){
-	char action_str[] = "\"%s\":{\"title\":\"%s\","\
+	char action_str[] = "\"%s\":{\"@type\":\"%s\",\"title\":\"%s\","\
 					"\"description\":\"%s\","\
-					"\"input\":{\"@type\":\"%s\",\"type\":\"object\",\"required\":[%s],"\
+					"\"input\":{\"type\":\"object\",\"required\":[%s],"\
 					"\"properties\":{%s}},\"links\":[{\"rel\":\"action\","\
 					"\"href\":\"%sactions/%s\"}]}";
 
@@ -448,8 +484,8 @@ char *action_model_jsonize(action_t *a, int16_t thing_index){
 
 
 	buff = malloc(400 + strlen(all_prop_buff));
-	sprintf(buff, action_str, a -> id, a -> title, a -> description,
-			a -> input_at_type -> at_type, req_buff, all_prop_buff, th_lk, a -> id);
+	sprintf(buff, action_str, a -> id, a -> input_at_type -> at_type, a -> title, a -> description,
+			req_buff, all_prop_buff, th_lk, a -> id);
 
 	free(req_buff);
 	free(all_prop_buff);
@@ -464,28 +500,184 @@ char *action_model_jsonize(action_t *a, int16_t thing_index){
  *
  * *********************************************/
 char *input_prop_jsonize(action_input_prop_t *aip){
-	char *buff;
+	char *buff = NULL, *buff1 = NULL, *buff_enum = NULL;
 	char *type[] = {"null", "boolean", "object", "array",
 					"number", "integer", "string"};
-	//char *bool_str[] = {"false", "true"};
-	char str_int[] = "\"%s\":{\"type\":\"%s\",\"minimum\":%i,\"maximum\":%i,\"unit\":\"%s\"}";
-	char str_num[] = "\"%s\":{\"type\":\"%s\",\"minimum\":%4.2f,\"maximum\":%4.2f,\"unit\":\"%s\"}";
+	char prop_str[] = "\"%s\":{\"type\":\"%s\"";
+	char buff_temp[30];
+	bool add_comma = false;
 
+	//allocate and clear buffers
 	buff = malloc(ACTION_PROP_LEN);
 	memset(buff, 0, ACTION_PROP_LEN);
+	memset(buff_temp, 0, 30);
 
 	if (aip -> type == VAL_INTEGER){
-		sprintf(buff, str_int, aip -> id, type[aip -> type], (int)(*(aip -> min_value)),
-				(int)(*(aip -> max_value)), aip -> unit);
+		if ((aip -> min_valid == true) || (aip -> max_valid == true) ||
+				(aip -> unit != NULL)){
+			buff1 = malloc(100);
+			memset(buff1, 0, 100);
+		}
+		if (aip -> min_valid == true){
+			sprintf(buff_temp, "\"minimum\":%i", aip -> min_value.int_val);
+			strcat(buff1, buff_temp);
+			add_comma = true;
+		}
+		if (aip -> max_valid == true){
+			if (add_comma == true){
+				strcat(buff1, ",");
+			}
+			sprintf(buff_temp, "\"maximum\":%i", aip -> max_value.int_val);
+			strcat(buff1, buff_temp);
+			add_comma = true;
+		}
+		if (aip -> unit != NULL){
+			if (add_comma == true){
+				strcat(buff1, ",");
+			}
+			sprintf(buff_temp, "\"unit\":\"%s\"", aip -> unit);
+			strcat(buff1, buff_temp);
+		}
+
+		if ((aip -> enum_prop == true) && (aip -> enum_list != NULL)){
+			//enum value
+			char buff_loc_1[20];
+			enum_item_t *enum_item;
+			int enum_i = 0;
+
+			//calculate needed place
+			enum_item  = aip -> enum_list;
+			while (enum_item){
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+
+			buff_enum = malloc(enum_i * 10); //TODO: calculate needed place
+			strcpy(buff_enum, "\"enum\":[");
+
+			enum_item  = aip -> enum_list;
+			enum_i = 0;
+			memset(buff_loc_1, 0, 20);
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				sprintf(buff_loc_1, "%d", enum_item -> value.int_val);
+				strcat(buff_enum, buff_loc_1);
+				memset(buff_loc_1, 0, 20);
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "]");
+		}
+
 	}
 	else if (aip -> type == VAL_NUMBER){
-		sprintf(buff, str_num, aip -> id, type[aip -> type], *(aip -> min_value),
-				*(aip -> max_value), aip -> unit);
+		if ((aip -> min_valid == true) || (aip -> max_valid == true) ||
+				(aip -> unit != NULL)){
+			buff1 = malloc(100);
+			memset(buff1, 0, 100);
+		}
+		//add maximum value
+		if (aip -> min_valid == true){
+			sprintf(buff_temp, "\"minimum\":%5.3f", aip -> min_value.float_val);
+			strcat(buff1, buff_temp);
+			add_comma = true;
+		}
+		//add minimum value
+		if (aip -> max_valid == true){
+			if (add_comma == true){
+				strcat(buff1, ",");
+			}
+			sprintf(buff_temp, "\"maximum\":%5.3f", aip -> max_value.float_val);
+			strcat(buff1, buff_temp);
+			add_comma = true;
+		}
+		//add unit
+		if (aip -> unit != NULL){
+			if (add_comma == true){
+				strcat(buff1, ",");
+			}
+			sprintf(buff_temp, "\"unit\":\"%s\"", aip -> unit);
+			strcat(buff1, buff_temp);
+		}
+
+		if ((aip -> enum_prop == true) && (aip -> enum_list != NULL)){
+			//enum value
+			char buff_loc_1[20];
+			enum_item_t *enum_item;
+			int enum_i = 0;
+
+			//calculate needed place
+			enum_item  = aip -> enum_list;
+			while (enum_item){
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+
+			buff_enum = malloc(enum_i * 10); //TODO: calculate needed place
+			strcpy(buff_enum, "\"enum\":[");
+
+			enum_item  = aip -> enum_list;
+			enum_i = 0;
+			memset(buff_loc_1, 0, 20);
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				sprintf(buff_loc_1, "%5.3f", enum_item -> value.float_val);
+				strcat(buff_enum, buff_loc_1);
+				memset(buff_loc_1, 0, 20);
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "]");
+		}
 	}
-	else{
-		printf("input property type is not a number!\n");
+	else if (aip -> type == VAL_STRING){
+		if ((aip -> enum_prop == true) && (aip -> enum_list != NULL)){
+			enum_item_t *enum_item;
+			int enum_i = 0;
+			int len = 0;
+
+			enum_item  = aip -> enum_list;
+			//calculate needed place
+			while (enum_item){
+				len += strlen(enum_item -> value.str_addr);
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			buff_enum = malloc(len + 20 + enum_i * 2);
+
+			strcpy(buff_enum, "\"enum\":[");
+			enum_item  = aip -> enum_list;
+			enum_i = 0;
+			while (enum_item){
+				if (enum_i > 0){
+					strcat(buff_enum, ",");
+				}
+				strcat(buff_enum, "\"");
+				strcat(buff_enum, enum_item -> value.str_addr);
+				strcat(buff_enum, "\"");
+				enum_i++;
+				enum_item = enum_item -> next;
+			}
+			strcat(buff_enum, "]");
+		}
 	}
 
+	sprintf(buff, prop_str, aip -> id, type[aip -> type]);
+	if (buff1 != NULL){
+		strcat(buff, ",");
+		strcat(buff, buff1);
+		free(buff1);
+	}
+	if (buff_enum != NULL){
+		strcat(buff, ",");
+		strcat(buff, buff_enum);
+		free(buff_enum);
+	}
+	strcat(buff, "}");
 
 	return buff;
 }
@@ -493,26 +685,42 @@ char *input_prop_jsonize(action_input_prop_t *aip){
 
 /******************************************
  *
- *
+ * initialization of action input
  *
  * ******************************************/
 action_input_prop_t *action_input_prop_init(char *_id,
 											VAL_TYPE _type,
-											bool _req,
-											double *_min,
-											double *_max,
-											char *unit){
+											bool _req,		//required
+											int_float_u *_min,
+											int_float_u *_max,
+											char *unit,
+											bool is_enum,
+											enum_item_t *enum_list){
 	action_input_prop_t *aip;
 
 	aip = malloc(sizeof(action_input_prop_t));
 	aip -> id = _id;
 	aip -> type = _type;
 	aip -> required = _req;
-	aip -> min_value = _min;
-	aip -> max_value = _max;
+	if (_min != NULL){
+		aip -> min_value = *_min;
+		aip -> min_valid = true;
+	}
+	else{
+		aip -> min_valid = false;
+	}
+	if (_max != NULL){
+		aip -> max_value = *_max;
+		aip -> max_valid = true;
+	}
+	else{
+		aip -> max_valid = false;
+	}
 	aip -> unit = unit;
 	aip -> next = NULL;
 	aip -> input_prop_index = -1;
+	aip -> enum_prop = is_enum;
+	aip -> enum_list = enum_list;
 
 	return aip;
 }
@@ -617,13 +825,5 @@ uint16_t get_action_request_queue(action_t *a, char *buff){
 			}
 		}
 	}
-	//else{
-		//buff = malloc(3);
-		//buff[0] = '[';
-		//buff[1] = ']';
-		//buff[2] = 0;
-		//res = 2;
-	//}
-
 	return res;
 }
