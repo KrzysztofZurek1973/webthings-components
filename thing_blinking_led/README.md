@@ -1,8 +1,8 @@
-# Web Thing – Blinking Led
+# Web Thing – Blinking LED
 
 ## Introduction
 
-This is web connected blinking led.
+This is web connected blinking LED.
 
 ## Dependencies
 
@@ -17,9 +17,13 @@ Blinking led has @type „Light” and following parameters:
 
 * property `led_on`, turns on/off blinking, @type *OnOffProperty*
 * property `frequency`, frequency of blinking in 0.1 Hz (number 10 means 1 Hz), @type *LevelProperty*
-* action `constant_on`, turn led on for specified period of time, the only one input is *duration* in seconds, @type `ToggleAction`
+* action `settings` with the following inputs:
+	- mode (enum values)
+	- pattern (enum values)
+	- sensor (boolean)
+	- timer (integer 0..100).
 
-![action](led_3.png)
+![action](./images/led-action-inputs.png)
 
 ## Documentation
 
@@ -29,15 +33,15 @@ How to start the node see [iot_web_thing_example](https://github.com/KrzysztofZu
 
 GPIO number can be set in `idf.py menuconfig -> Web Thing Example` (see [iot_web_thing_example](https://github.com/KrzysztofZurek1973/iot_web_thing_example)).
 
-Default led pin is GPIO26.
+Default LED pin is GPIO26.
 
 ### Gateway web interface
 
-![action](led_2.png)
+![action](./images/led-gui.png)
 
 ### Scheme
 
-![action](led_1.png)
+![action](./images/led_1.png)
 
 ## Source Code
 
