@@ -18,7 +18,11 @@ This software uses esp-idf environment with freeRTOS.
 * **Blinking Led** - `Light` thing with the following parameters:
 	- `led_on`: ON/OFF switch
 	- `frequency`: led blinking frequency
-	- `constant_on` (action): turns the led on for defined period of time
+	- `settings`: action with the following inputs:
+		- mode (enum values)
+		- pattern (enum values)
+		- sensor (boolean)
+		- timer (integer 0..100).
 	
 * **ws2812 controller** - with the following parameters:
 	- `on` - ON/OFF led line
