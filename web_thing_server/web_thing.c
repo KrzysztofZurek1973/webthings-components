@@ -27,6 +27,31 @@ thing_t *thing_init(void){
 //add property to thing
 int8_t add_property(thing_t *_t, property_t *_p){
 	int res = 0;
+	float num = _p -> multiple_of.float_val;
+	
+	if (_p -> type == VAL_NUMBER){
+		if ((num != 0) && (num < 20)){
+			int j = 0, k = 0, l = 0;
+			char buff[16];
+
+			memset(buff, 0, 16);
+			sprintf(buff, "%f", _p -> multiple_of.float_val);
+			for (j = 0; j < 16; j++){
+				if ((buff[j] > '0') && (buff[j] <= '9')){
+					k = j - l;
+				}
+				else if (buff[j] == '.'){
+					l = j;
+				}
+			}
+			//prepare printf format
+			memset(_p -> print_format, 0, 16);
+			sprintf(_p -> print_format, "%%.%if", k);
+		}
+		else{
+			strcpy(_p -> print_format, "%.0f");
+		}
+	}
 
 	if (_t -> last_property == NULL){
 		_t -> properties = _p;

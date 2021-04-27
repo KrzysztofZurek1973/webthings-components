@@ -425,7 +425,7 @@ int16_t brightness_set(char *new_value_str){
 char *color_model_jsonize(property_t *p){
 	char *buff;
 
-	//only unit printed in model, is it enough?
+	//only unit printed in model
 	buff = malloc(12 + strlen(p -> unit));
 	sprintf(buff, "\"unit\":\"%s\",", p -> unit);
 

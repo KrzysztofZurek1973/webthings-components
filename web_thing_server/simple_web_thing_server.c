@@ -437,7 +437,10 @@ int16_t set_resource_value(int8_t thing_nr, char *name, char *new_value_str){
 
 		//set new value for this property
 		if ((p != NULL) && (p -> read_only == false)){
-			set_result = p -> set(new_value_str);
+			set_result = p -> set(name, new_value_str);
+		}
+		else{
+			set_result = -1;
 		}
 
 		if (set_result == 1){

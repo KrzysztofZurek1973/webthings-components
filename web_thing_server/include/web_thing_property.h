@@ -20,7 +20,7 @@ typedef struct link_t link_t;
 /*
  * if new value is different then the old one set_callback_t must return "1" (one)
  */
-typedef int16_t (set_callback_t)(char *new_value);
+typedef int16_t (set_callback_t)(char *name, char *new_value);
 
 /*
  * function jsonize_t must return json representation of the property value in
@@ -45,6 +45,7 @@ struct property_t{
 	int_float_u max_value;
 	int_float_u multiple_of;
 	char *unit;
+	char print_format[16];
 	bool enum_prop;
 	enum_item_t *enum_list;
 	bool read_only;
